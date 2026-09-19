@@ -12,6 +12,9 @@ from samplesort.config import ArmConfig
 
 logger = logging.getLogger(__name__)
 
+#: Any sequence of joint angles: a list, tuple or NumPy array.
+JointVector = Sequence[float] | np.ndarray
+
 
 class ArmError(RuntimeError):
     """Raised when an arm command is invalid or the hardware refuses it."""
@@ -59,7 +62,7 @@ class ArmInterface(abc.ABC):
         """Return the current joint angles in radians, shape ``(num_joints,)``."""
 
     @abc.abstractmethod
-    def move_to_joints(self, q: Sequence[float], duration: float | None = None) -> None:
+    def move_to_joints(self, q: JointVector, duration: float | None = None) -> None:
         """Drive the arm to a joint configuration.
 
         Args:
@@ -90,7 +93,7 @@ class ArmInterface(abc.ABC):
 
     # ------------------------------------------------------------------ helpers
 
-    def clamp_to_limits(self, q: Sequence[float]) -> np.ndarray:
+    def clamp_to_limits(self, q: JointVector) -> np.ndarray:
         """Clamp a joint vector into the configured limits.
 
         Args:
@@ -104,7 +107,7 @@ class ArmInterface(abc.ABC):
         highs = np.array([high for _, high in self.config.joint_limits])
         return np.asarray(np.clip(array, lows, highs), dtype=float)
 
-    def validate_joints(self, q: Sequence[float], *, tolerance: float = 1e-6) -> np.ndarray:
+    def validate_joints(self, q: JointVector, *, tolerance: float = 1e-6) -> np.ndarray:
         """Check a joint vector against the configured limits.
 
         Args:

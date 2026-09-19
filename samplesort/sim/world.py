@@ -231,7 +231,7 @@ class SimWorld:
             half_y = (max(ys) - min(ys)) / 2.0 + pad
             center = ((max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0)
 
-            plate_h = 0.008
+            plate_h = ws.rack_plate_height
             collision = client.createCollisionShape(
                 pb.GEOM_BOX, halfExtents=[half_x, half_y, plate_h / 2.0]
             )

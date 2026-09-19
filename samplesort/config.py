@@ -240,6 +240,7 @@ class WorkspaceConfig(_Base):
     tube: TubeConfig
     grasp_height: float = Field(gt=0.0)
     approach_clearance: float = Field(gt=0.0)
+    rack_plate_height: float = Field(gt=0.0)
     racks: list[RackConfig]
     marker_board: MarkerBoardConfig
 
@@ -252,6 +253,16 @@ class WorkspaceConfig(_Base):
         if duplicates:
             raise ValueError(f"duplicate rack ids in workspace config: {sorted(duplicates)}")
         return self
+
+    @property
+    def rack_grasp_height(self) -> float:
+        """TCP height for grasping or releasing a tube that sits on a rack plate."""
+        return self.table_height + self.rack_plate_height + self.grasp_height
+
+    @property
+    def table_grasp_height(self) -> float:
+        """TCP height for grasping a tube standing directly on the table."""
+        return self.table_height + self.grasp_height
 
     def rack(self, rack_id: str) -> RackConfig:
         """Look up a rack by id.

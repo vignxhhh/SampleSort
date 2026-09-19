@@ -11,7 +11,7 @@ Resume rule: continue from the first unchecked item below.
       models + YAML configs, CLI skeleton, CI workflow, ruff/mypy/pytest config.
 - [x] **Phase 2 — HAL + Simulation.** Abstract interfaces, PyBullet world, sim arm,
       sim camera, `samplesort sim-demo`.
-- [ ] **Phase 3 — Kinematics + Scripted control.** FK/IK, trajectory interpolation,
+- [x] **Phase 3 — Kinematics + Scripted control.** FK/IK, trajectory interpolation,
       scripted pick/place of a single tube in sim.
 - [ ] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
 - [ ] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
@@ -99,3 +99,43 @@ Resume rule: continue from the first unchecked item below.
 - `SimCamera` uses PyBullet's `ER_TINY_RENDERER`; it is headless-safe and
   deterministic but has no shadows or anti-aliasing. Good enough for HSV blob
   detection, and it keeps CI free of any GPU requirement.
+
+## Phase 3 — Kinematics + Scripted control ✅
+
+**Delivered**
+
+- `planning/kinematics.py`: `Pose`, analytic `forward_kinematics`,
+  `inverse_kinematics`, `link_positions`, `is_reachable`.
+- `control/trajectory.py`: smoothstep easing, `interpolate`, `resample`,
+  velocity-aware `duration_for`, plus path-inspection helpers.
+- `planning/task_planner.py`: the `PickPlaceJob` contract.
+- `control/scripted.py`: `ScriptedController` with a six-stage waypoint sequence,
+  per-stage verification and a `FailureReason` taxonomy.
+- `tests/test_kinematics.py` (17), `tests/test_trajectory.py` (16),
+  `tests/test_scripted_control.py` (11). Suite total: 84 passing.
+
+**Design decisions**
+
+- *IK is analytic, not numerical.* The spec allows numerical IK, but the arm's
+  yaw + three-coplanar-pitch + roll structure has an exact closed form. It is
+  faster, has no convergence failures, exposes both elbow branches explicitly, and
+  round-trips against FK to machine precision (measured worst case: 3e-16 m).
+- *Both elbow branches are tried.* `inverse_kinematics` prefers elbow-up, falls
+  back to elbow-down, and only then reports `UnreachableError` — distinguishing
+  "outside the workspace" from "reachable but violates joint limits".
+- *`PickPlaceJob` lives in `planning/task_planner.py` from phase 3.* The control
+  layer needs the data contract before the planner that produces it exists. Only
+  the dataclass landed here; `TaskPlanner` itself arrives in phase 5.
+- *Grasp verification goes through a `Protocol`.* `ScriptedController` checks for
+  a `has_object()` method rather than importing `SimArm`, so `control/` stays
+  independent of the simulation backend. A real arm without a grasp sensor is
+  assumed to have succeeded (wrist-camera verification is a listed stretch goal).
+- *New config key `rack_plate_height`* — placing onto a rack needs a TCP height
+  8 mm above the table grasp height. It was previously hard-coded inside
+  `sim/world.py`, which violated the no-hard-coded-hardware-values standard.
+
+**Known issues**
+
+- Placement lands within ~5 mm of the slot centre, well inside the 30 mm
+  tolerance. Tighter placement would need closed-loop visual servoing, which is
+  out of scope for the scripted baseline.

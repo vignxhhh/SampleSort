@@ -19,7 +19,8 @@ tube:
 
 # Grasp/approach heights measured from the table surface.
 grasp_height: 0.0560           # TCP height when closing on a tube cap
-approach_clearance: 0.0700     # extra height for pre-grasp / lift poses
+approach_clearance: 0.0600     # extra height for pre-grasp / lift poses
+rack_plate_height: 0.0080      # thickness of a rack plate; raises its grasp height
 
 racks:
   - id: rack_a

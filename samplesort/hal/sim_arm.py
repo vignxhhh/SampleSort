@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 
 import numpy as np
 import pybullet as pb
 
 from samplesort.config import ArmConfig
-from samplesort.hal.arm import ArmError, ArmInterface
+from samplesort.hal.arm import ArmError, ArmInterface, JointVector
 from samplesort.sim.world import SIM_TIMESTEP, SimWorld
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,7 @@ class SimArm(ArmInterface):
         states = client.getJointStates(self.world.arm_id, self.world.joint_indices)
         return np.array([state[0] for state in states], dtype=float)
 
-    def move_to_joints(self, q: Sequence[float], duration: float | None = None) -> None:
+    def move_to_joints(self, q: JointVector, duration: float | None = None) -> None:
         """Drive the arm to ``q`` over ``duration`` seconds of simulated time.
 
         Setpoints are eased with a smooth-step profile so the arm accelerates and
