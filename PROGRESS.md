@@ -14,7 +14,7 @@ Resume rule: continue from the first unchecked item below.
 - [x] **Phase 3 — Kinematics + Scripted control.** FK/IK, trajectory interpolation,
       scripted pick/place of a single tube in sim.
 - [x] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
-- [ ] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
+- [x] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
 - [ ] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
 - [ ] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
 - [ ] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
@@ -196,3 +196,59 @@ Resume rule: continue from the first unchecked item below.
 - The HSV detector needs stable lighting on real hardware; `samplesort calibrate`
   (phase 8) exists partly to re-derive thresholds per rig. Swapping in a trained
   detector is a listed stretch goal.
+
+## Phase 5 — Planning + Pipeline ✅
+
+**Delivered**
+
+- `planning/rack_state.py`: `RackState` occupancy tracking, `SlotAssignment`,
+  `RackFullError` with a message naming the rack and its capacity.
+- `planning/task_planner.py`: `TaskPlanner`, `PlanResult`, `SkippedDetection`.
+- `logging_db/sort_log.py`: `SortLog` and `SortRecord` over SQLite, with filtered
+  queries and the aggregates the dashboard and benchmark need.
+- `pipeline.py`: `SortPipeline` running perceive → plan → execute → log, plus
+  `PipelineReport` with success rate, grasp rate, timing and failure breakdown.
+- CLI: `samplesort sim-demo` now runs a full sort; new `samplesort run
+  [--mode] [--dry-run] [--policy]`.
+- `tests/test_rack_state.py` (15), `tests/test_task_planner.py` (13),
+  `tests/test_sort_log.py` (18), `tests/test_pipeline_sim.py` (20).
+  Suite total: 207 passing.
+
+**Design decisions**
+
+- *Tube geometry retuned to fix a real collision.* With 50 mm tubes, a carried
+  tube hung 57 mm below the TCP and its base passed *below* the tops of tubes
+  still standing on the table, knocking them over mid-transit — two grasp misses
+  per 8-tube run. Tubes are now 40 + 12 mm with a 46 mm grasp height and a 70 mm
+  approach clearance, giving 18 mm of clearance over a standing tube. Result: 8/8
+  on seeds 42, 7 and 1234.
+- *Jobs are ordered nearest-first.* Short reaches are faster and more accurate,
+  and clearing near tubes first reduces the chance of brushing one while reaching
+  past it.
+- *Slots are reserved optimistically and released on failure*, so a failed place
+  does not permanently burn a slot.
+- *Sim ground truth is attached to jobs explicitly*, in `SortPipeline.plan()`,
+  and only in sim. It is instrumentation — it drives grasp/placement verification
+  and lets the benchmark score "did this tube reach the rack its *true* class
+  belongs in". Perception and planning never read it, and it is simply absent on
+  real hardware.
+- *Unsortable tubes are retired.* A tube that fails its grasp and its retry would
+  otherwise be re-detected forever. In sim it is removed from the scene; on real
+  hardware the operator is asked to clear it by hand.
+- *`run_id` groups every row from one run*, which is what makes the benchmark's
+  per-trial and scripted-vs-learned comparisons possible from the log alone.
+- *The sort log is append-only.* Nothing updates or deletes a row in normal
+  operation, which is the right shape for a chain-of-custody record and removes
+  any need for schema migrations.
+
+**Measured**
+
+- `samplesort sim-demo --seed 42 --num-tubes 8`: 8/8 sorted, ~0.5 s per job,
+  24 rows written to `outputs/sortlog.db` across three seeds, every row in the
+  rack its class maps to.
+
+**Known issues**
+
+- Jobs are planned in a batch from one frame, so if the arm did disturb a tube
+  mid-batch the remaining pick positions would be stale. The clearance fix removes
+  the cause; the outer loop re-perceives and recovers if it ever happens anyway.

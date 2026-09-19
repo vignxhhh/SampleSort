@@ -11,15 +11,18 @@ pickup_zone:
 
 tube:
   body_radius: 0.0080
-  body_height: 0.0500
+  body_height: 0.0400
   cap_radius: 0.0095
-  cap_height: 0.0140
+  cap_height: 0.0120
   min_separation: 0.0400       # keeps spawned tubes from overlapping
   mass: 0.0150
 
 # Grasp/approach heights measured from the table surface.
-grasp_height: 0.0560           # TCP height when closing on a tube cap
-approach_clearance: 0.0600     # extra height for pre-grasp / lift poses
+grasp_height: 0.0460           # TCP height when closing on a tube cap
+# A carried tube hangs `grasp_height` below the TCP, so the transit height must
+# clear the tops of the tubes still standing on the table:
+#   grasp_height + approach_clearance - grasp_height  >  tube.total_height
+approach_clearance: 0.0700     # extra height for pre-grasp / lift / transit poses
 rack_plate_height: 0.0080      # thickness of a rack plate; raises its grasp height
 
 racks:

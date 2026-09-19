@@ -1,8 +1,9 @@
 """Turn detections into ordered pick-and-place jobs.
 
-Phase 3 defines the :class:`PickPlaceJob` contract that the control layer
-executes. The :class:`TaskPlanner` that produces them lands in phase 5, once rack
-state and perception exist.
+:class:`PickPlaceJob` is the contract between perception/planning and the control
+layer. :class:`TaskPlanner` converts a frame's worth of detections into a list of
+them, allocating rack slots as it goes and ordering the work so the arm never
+travels further than it has to.
 """
 
 from __future__ import annotations
@@ -10,7 +11,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from samplesort.config import SampleSortConfig
+from samplesort.perception.types import Detection
 from samplesort.planning.kinematics import Pose
+from samplesort.planning.rack_state import RackFullError, RackState
 
 logger = logging.getLogger(__name__)
 
@@ -53,3 +57,105 @@ class PickPlaceJob:
             f"{self.class_label} tube at ({self.pick_xy[0]:+.3f}, {self.pick_xy[1]:+.3f}) "
             f"-> {self.rack_id} slot {self.slot_index}"
         )
+
+
+@dataclass(frozen=True)
+class SkippedDetection:
+    """A detection that could not be turned into a job.
+
+    Attributes:
+        detection: The detection that was skipped.
+        reason: Why it was skipped, e.g. ``"rack_full"`` or ``"low_confidence"``.
+    """
+
+    detection: Detection
+    reason: str
+
+
+@dataclass(frozen=True)
+class PlanResult:
+    """The outcome of planning one frame.
+
+    Attributes:
+        jobs: The pick-and-place jobs to execute, in order.
+        skipped: Detections that were deliberately not turned into jobs.
+    """
+
+    jobs: list[PickPlaceJob]
+    skipped: list[SkippedDetection]
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether there is nothing left to do."""
+        return not self.jobs
+
+
+class TaskPlanner:
+    """Converts detections into ordered pick-and-place jobs.
+
+    Jobs are ordered nearest-first from the arm's base: shorter reaches are both
+    faster and more accurate, and clearing the near tubes first reduces the chance
+    of knocking one over while reaching past it.
+
+    Args:
+        config: The validated configuration bundle.
+        rack_state: Occupancy tracker that slots are allocated from.
+    """
+
+    def __init__(self, config: SampleSortConfig, rack_state: RackState) -> None:
+        """Bind the planner to a rack state (see the class docstring for args)."""
+        self.config = config
+        self.rack_state = rack_state
+
+    def plan(self, detections: list[Detection]) -> PlanResult:
+        """Turn one frame's detections into jobs.
+
+        Detections below the configured confidence threshold, outside the pickup
+        zone, or destined for a full rack are skipped with a stated reason rather
+        than silently dropped.
+
+        Args:
+            detections: What the detector found this frame.
+
+        Returns:
+            The ordered jobs plus every skipped detection and why.
+        """
+        zone = self.config.workspace.pickup_zone
+        threshold = self.config.classes.detector.min_confidence
+
+        candidates: list[Detection] = []
+        skipped: list[SkippedDetection] = []
+        for detection in detections:
+            x, y = detection.table_xy
+            if detection.confidence < threshold:
+                skipped.append(SkippedDetection(detection, "low_confidence"))
+            elif not zone.contains(x, y):
+                skipped.append(SkippedDetection(detection, "outside_pickup_zone"))
+            else:
+                candidates.append(detection)
+
+        # Nearest to the arm base first.
+        candidates.sort(key=lambda d: d.distance_to(0.0, 0.0))
+
+        jobs: list[PickPlaceJob] = []
+        for detection in candidates:
+            try:
+                assignment = self.rack_state.occupy(detection.class_label)
+            except RackFullError as exc:
+                logger.warning("skipping %s: %s", detection.describe(), exc)
+                skipped.append(SkippedDetection(detection, "rack_full"))
+                continue
+            jobs.append(
+                PickPlaceJob(
+                    class_label=detection.class_label,
+                    pick_xy=detection.table_xy,
+                    rack_id=assignment.rack_id,
+                    slot_index=assignment.slot_index,
+                    place_xy=assignment.xy,
+                    sample_id=detection.sample_id,
+                    confidence=detection.confidence,
+                )
+            )
+
+        logger.debug("planned %d jobs, skipped %d", len(jobs), len(skipped))
+        return PlanResult(jobs=jobs, skipped=skipped)
