@@ -4,17 +4,17 @@ table_size: [0.8000, 0.8000]
 
 # Tubes are spawned (sim) and expected (real) inside this axis-aligned box.
 pickup_zone:
-  x_min: 0.1500
-  x_max: 0.3000
-  y_min: -0.1300
-  y_max: 0.1300
+  x_min: 0.1300
+  x_max: 0.2500
+  y_min: -0.1350
+  y_max: 0.1350
 
 tube:
   body_radius: 0.0080
   body_height: 0.0500
   cap_radius: 0.0095
   cap_height: 0.0140
-  min_separation: 0.0450       # keeps spawned tubes from overlapping
+  min_separation: 0.0400       # keeps spawned tubes from overlapping
   mass: 0.0150
 
 # Grasp/approach heights measured from the table surface.
@@ -25,24 +25,24 @@ racks:
   - id: rack_a
     label: "Rack A"
     slots:
-      - [0.1600, 0.2100]
-      - [0.2100, 0.2100]
-      - [0.2600, 0.2100]
-      - [0.3100, 0.2100]
+      - [0.1000, 0.2000]
+      - [0.1450, 0.2000]
+      - [0.1900, 0.2000]
+      - [0.2350, 0.2000]
   - id: rack_b
     label: "Rack B"
     slots:
-      - [0.1600, -0.2100]
-      - [0.2100, -0.2100]
-      - [0.2600, -0.2100]
-      - [0.3100, -0.2100]
+      - [0.1000, -0.2000]
+      - [0.1450, -0.2000]
+      - [0.1900, -0.2000]
+      - [0.2350, -0.2000]
   - id: rack_c
     label: "Rack C"
     slots:
-      - [0.3700, 0.1050]
-      - [0.3700, 0.0350]
-      - [0.3700, -0.0350]
-      - [0.3700, -0.1050]
+      - [0.2950, 0.0750]
+      - [0.2950, 0.0250]
+      - [0.2950, -0.0250]
+      - [0.2950, -0.0750]
 
 # Printed ArUco board used for real-mode camera-to-table calibration.
 marker_board:
@@ -52,4 +52,4 @@ marker_board:
   square_length: 0.0400        # metres
   marker_length: 0.0300
   # Table-frame XY of the board origin (its top-left square corner).
-  origin: [0.0600, -0.1800]
+  origin: [0.0500, -0.1500]

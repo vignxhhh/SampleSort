@@ -3,8 +3,8 @@
 # The simulated arm is generated from these numbers, so the analytic kinematics
 # and the PyBullet model can never drift apart.
 name: so101
-base_height: 0.0600            # metres, shoulder pitch axis above the arm base
-link_lengths: [0.1400, 0.1400, 0.1000]   # upper arm, forearm, wrist-to-TCP
+base_height: 0.0800            # metres, shoulder pitch axis above the arm base
+link_lengths: [0.1750, 0.1750, 0.0900]   # upper arm, forearm, wrist-to-TCP
 
 joint_names: [base_yaw, shoulder, elbow, wrist_pitch, wrist_roll]
 
@@ -16,7 +16,12 @@ joint_limits:
   - [-2.3562, 2.3562]          # wrist_pitch
   - [-3.1416, 3.1416]          # wrist_roll
 
-home_position: [0.0, 1.0472, -2.0944, -0.5236, 0.0]
+# Tool pointing straight down, TCP at radius 0.18 m and height 0.22 m.
+home_position: [0.0, 1.4904, -1.1673, -1.8939, 0.0]
+
+# Folded back over the base so the overhead camera sees the whole pickup zone.
+# The pipeline retracts here before every perception step.
+observe_position: [0.0, 2.0673, -2.2041, -1.434, 0.0]
 
 max_joint_velocity: 1.5        # rad/s, used to time scripted trajectories
 default_move_duration: 1.0     # seconds

@@ -60,6 +60,7 @@ class ArmConfig(_Base):
     joint_names: list[str]
     joint_limits: list[tuple[float, float]]
     home_position: list[float]
+    observe_position: list[float]
     max_joint_velocity: float = Field(gt=0.0)
     default_move_duration: float = Field(gt=0.0)
     gripper: GripperConfig
@@ -86,16 +87,22 @@ class ArmConfig(_Base):
             raise ValueError("SampleSort models a 5-DOF arm; joint_names must hold 5 entries")
         if len(self.joint_limits) != n:
             raise ValueError("joint_limits must have one entry per joint")
-        if len(self.home_position) != n:
-            raise ValueError("home_position must have one entry per joint")
+        for field_name, pose in (
+            ("home_position", self.home_position),
+            ("observe_position", self.observe_position),
+        ):
+            if len(pose) != n:
+                raise ValueError(f"{field_name} must have one entry per joint")
         for name, (low, high) in zip(self.joint_names, self.joint_limits, strict=True):
             if low >= high:
                 raise ValueError(f"joint_limits for '{name}' are inverted: [{low}, {high}]")
-        for name, (low, high), q in zip(
-            self.joint_names, self.joint_limits, self.home_position, strict=True
+        for field_name, pose in (
+            ("home_position", self.home_position),
+            ("observe_position", self.observe_position),
         ):
-            if not low <= q <= high:
-                raise ValueError(f"home_position for '{name}' ({q}) violates its joint limits")
+            for name, (low, high), q in zip(self.joint_names, self.joint_limits, pose, strict=True):
+                if not low <= q <= high:
+                    raise ValueError(f"{field_name} for '{name}' ({q}) violates its joint limits")
         if self.servo_ids and len(self.servo_ids) != n:
             raise ValueError("servo_ids must have one entry per joint when provided")
         return self

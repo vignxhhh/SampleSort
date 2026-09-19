@@ -69,6 +69,29 @@ def show_config(config_dir: ConfigDirOpt = None) -> None:
     typer.echo(cfg.model_dump_json(indent=2))
 
 
+@app.command("sim-demo")
+def sim_demo(
+    config_dir: ConfigDirOpt = None,
+    seed: SeedOpt = None,
+    num_tubes: Annotated[int, typer.Option("--num-tubes", "-n", help="Tubes to spawn.")] = 6,
+    gui: Annotated[bool, typer.Option("--gui", help="Open the PyBullet GUI window.")] = False,
+) -> None:
+    """Build the simulated workspace and render the overhead view."""
+    from samplesort.hal.factory import build_backend
+
+    cfg = _load(config_dir, seed)
+    backend = build_backend(cfg, gui=gui, seed=seed if seed is not None else cfg.seed)
+    assert backend.world is not None
+    with backend:
+        backend.arm.go_home()
+        tubes = backend.world.spawn_tubes(num_tubes)
+        frame = backend.camera.read()
+        typer.echo(f"Spawned {len(tubes)} tubes; camera frame {frame.shape}")
+        for tube in tubes:
+            x, y = backend.world.tube_xy(tube.body_id)
+            typer.echo(f"  {tube.label:<7} at ({x:+.3f}, {y:+.3f})")
+
+
 def main() -> None:
     """Console-script entry point."""
     app()
