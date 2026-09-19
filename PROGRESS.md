@@ -13,7 +13,7 @@ Resume rule: continue from the first unchecked item below.
       sim camera, `samplesort sim-demo`.
 - [x] **Phase 3 — Kinematics + Scripted control.** FK/IK, trajectory interpolation,
       scripted pick/place of a single tube in sim.
-- [ ] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
+- [x] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
 - [ ] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
 - [ ] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
 - [ ] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
@@ -139,3 +139,60 @@ Resume rule: continue from the first unchecked item below.
 - Placement lands within ~5 mm of the slot centre, well inside the 30 mm
   tolerance. Tighter placement would need closed-loop visual servoing, which is
   out of scope for the scripted baseline.
+
+## Phase 4 — Perception ✅
+
+**Delivered**
+
+- `perception/types.py`: the `Detection` dataclass.
+- `perception/calibration.py`: `Calibration` (save/load, pixel↔table mapping,
+  parallax correction), `calibration_from_camera_pose` for sim,
+  `calibrate_from_aruco` + `board_corner_table_positions` for real hardware.
+- `perception/classifier.py`: `ColorClassifier` (HSV masks, per-pixel and
+  per-region classification) and `QRReader` for the sample-ID stretch goal.
+- `perception/detector.py`: `TubeDetector` with mask → morphology → contour →
+  area/circularity/confidence filtering, plus `annotate()` for debugging.
+- `tests/synthetic.py`: shared synthetic-image renderers.
+- `tests/test_classifier.py` (21), `tests/test_calibration.py` (21),
+  `tests/test_detector.py` (15). Suite total: 141 passing.
+
+**Design decisions**
+
+- *Parallax is corrected explicitly.* The homography is fitted on the table plane
+  because that is where a printed ArUco board lies, but tube caps sit 64 mm above
+  it, which produced 4–10 mm of localisation error. `Calibration` now carries the
+  camera height and nadir and scales a detection back towards the nadir by
+  `(H - h) / H`. Measured error drops from ~10 mm to ~0.01 mm in sim, and the same
+  correction applies unchanged on real hardware.
+- *Hue ranges are merged across the 0/179 wrap.* `classes.yaml` must express red
+  as two intervals, which put pure red at a range edge and scored it 0.5.
+  Rejoining them into a single `[172, 188]` interval evaluated modulo 180 scores
+  pure red 1.0, as it should.
+- *Saturation and value are scored by headroom, not centrality.* The upper bound
+  on those channels is a don't-care ceiling, so a fully saturated cap is the best
+  case and must not be penalised for sitting at the top of its range. Only hue is
+  scored by centrality, where drifting either way really does mean a different class.
+- *Confidence blends colour and shape.* Caps are circular from overhead, so the
+  contour's isoperimetric ratio multiplies the colour score. This is what lets the
+  detector reject the elongated rack plates and the arm's own links.
+- *A blob is dropped when its dominant colour disagrees with the mask that found
+  it*, leaving it to the other class's own pass. That keeps overlapping HSV ranges
+  from producing duplicate detections of the same cap.
+- *The ArUco board's table orientation is a documented convention* (table +X up
+  the image, +Y left, matching `camera.yaml`). A board laid down rotated fails
+  loudly with a large residual rather than silently yielding a rotated frame.
+- *`rms_error_px` and `rms_error_m` are both reported.* The first is the
+  reprojection residual a calibration technician reads; the second is the
+  table-plane residual that bounds downstream placement error.
+
+**Measured**
+
+- Sim detection: 8/8 tubes found and correctly labelled, ~1.0–1.4 mm localisation
+  error — roughly a tenth of the 18 mm grasp tolerance.
+- Synthetic ArUco board: sub-pixel fit residual.
+
+**Known issues**
+
+- The HSV detector needs stable lighting on real hardware; `samplesort calibrate`
+  (phase 8) exists partly to re-derive thresholds per rig. Swapping in a trained
+  detector is a listed stretch goal.
