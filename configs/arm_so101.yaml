@@ -1,0 +1,36 @@
+# SO-101 style 5-DOF arm with a parallel gripper.
+#
+# The simulated arm is generated from these numbers, so the analytic kinematics
+# and the PyBullet model can never drift apart.
+name: so101
+base_height: 0.0600            # metres, shoulder pitch axis above the arm base
+link_lengths: [0.1400, 0.1400, 0.1000]   # upper arm, forearm, wrist-to-TCP
+
+joint_names: [base_yaw, shoulder, elbow, wrist_pitch, wrist_roll]
+
+# Radians. Order matches joint_names.
+joint_limits:
+  - [-3.1416, 3.1416]          # base_yaw
+  - [-0.5236, 2.6180]          # shoulder
+  - [-2.7925, 0.0873]          # elbow
+  - [-2.3562, 2.3562]          # wrist_pitch
+  - [-3.1416, 3.1416]          # wrist_roll
+
+home_position: [0.0, 1.0472, -2.0944, -0.5236, 0.0]
+
+max_joint_velocity: 1.5        # rad/s, used to time scripted trajectories
+default_move_duration: 1.0     # seconds
+
+gripper:
+  open_width: 0.0400           # metres between fingers
+  closed_width: 0.0120
+  finger_length: 0.0400
+  grasp_tolerance_xy: 0.0180   # max TCP-to-tube horizontal error for a successful grasp
+  grasp_tolerance_z: 0.0250    # max TCP-to-tube vertical error for a successful grasp
+
+# Real-hardware values. Ignored entirely when mode == sim.
+serial_port: /dev/ttyACM0
+baudrate: 1000000
+servo_model: sts3215
+servo_ids: [1, 2, 3, 4, 5]
+gripper_servo_id: 6

@@ -1,0 +1,55 @@
+# Table geometry, pickup zone and rack slot layout, all in the arm base frame (metres).
+table_height: 0.0
+table_size: [0.8000, 0.8000]
+
+# Tubes are spawned (sim) and expected (real) inside this axis-aligned box.
+pickup_zone:
+  x_min: 0.1500
+  x_max: 0.3000
+  y_min: -0.1300
+  y_max: 0.1300
+
+tube:
+  body_radius: 0.0080
+  body_height: 0.0500
+  cap_radius: 0.0095
+  cap_height: 0.0140
+  min_separation: 0.0450       # keeps spawned tubes from overlapping
+  mass: 0.0150
+
+# Grasp/approach heights measured from the table surface.
+grasp_height: 0.0560           # TCP height when closing on a tube cap
+approach_clearance: 0.0700     # extra height for pre-grasp / lift poses
+
+racks:
+  - id: rack_a
+    label: "Rack A"
+    slots:
+      - [0.1600, 0.2100]
+      - [0.2100, 0.2100]
+      - [0.2600, 0.2100]
+      - [0.3100, 0.2100]
+  - id: rack_b
+    label: "Rack B"
+    slots:
+      - [0.1600, -0.2100]
+      - [0.2100, -0.2100]
+      - [0.2600, -0.2100]
+      - [0.3100, -0.2100]
+  - id: rack_c
+    label: "Rack C"
+    slots:
+      - [0.3700, 0.1050]
+      - [0.3700, 0.0350]
+      - [0.3700, -0.0350]
+      - [0.3700, -0.1050]
+
+# Printed ArUco board used for real-mode camera-to-table calibration.
+marker_board:
+  dictionary: DICT_4X4_50
+  squares_x: 5
+  squares_y: 4
+  square_length: 0.0400        # metres
+  marker_length: 0.0300
+  # Table-frame XY of the board origin (its top-left square corner).
+  origin: [0.0600, -0.1800]

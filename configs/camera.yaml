@@ -1,0 +1,16 @@
+# Overhead camera looking straight down at the workspace.
+index: 0                       # OpenCV VideoCapture index (real mode)
+width: 640
+height: 480
+fps: 30
+intrinsics_path: configs/camera_intrinsics.yaml   # written by `samplesort calibrate`
+
+# Pose of the camera in the arm base frame (metres). The sim camera uses these
+# directly; in real mode they are the nominal mounting values used as a sanity
+# check against the ArUco-derived homography.
+position: [0.2400, 0.0000, 0.7000]
+look_at: [0.2400, 0.0000, 0.0000]
+up_axis: [1.0, 0.0, 0.0]       # image "up" points along +X of the base frame
+vertical_fov_deg: 45.0
+near: 0.05
+far: 2.0
