@@ -15,7 +15,7 @@ Resume rule: continue from the first unchecked item below.
       scripted pick/place of a single tube in sim.
 - [x] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
 - [x] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
-- [ ] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
+- [x] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
 - [ ] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
 - [ ] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
 - [ ] **Phase 9 — Documentation.** README, architecture diagram, results.
@@ -252,3 +252,56 @@ Resume rule: continue from the first unchecked item below.
 - Jobs are planned in a batch from one frame, so if the arm did disturb a tube
   mid-batch the remaining pick positions would be stale. The clearance fix removes
   the cause; the outer loop re-perceives and recovers if it ever happens anyway.
+
+## Phase 6 — Benchmark + Dashboard ✅
+
+**Delivered**
+
+- `benchmark.py`: `run_benchmark`, `TrialResult`, `BenchmarkReport` (JSON +
+  Markdown rendering, optional scripted-vs-learned comparison column),
+  `write_report`.
+- `dashboard/app.py`: Streamlit app over the sort log — headline metrics,
+  per-class and per-rack charts, time-per-sample trend, failure breakdown,
+  recent-sorts table, with mode/class/run filters.
+- CLI: `samplesort benchmark [--trials] [--num-tubes] [--output-dir] [--policy]
+  [--perception-noise]` and `samplesort dashboard [--port] [--host] [--headless]`.
+- `docs/results.md` filled in with real measured numbers.
+- `tests/test_benchmark.py` (22), `tests/test_dashboard.py` (6).
+  Suite total: 235 passing.
+
+**Design decisions**
+
+- *Sorting accuracy is scored against ground truth, not against the controller's
+  own verdict.* A misclassified tube is placed perfectly, just in the wrong rack —
+  only the simulator's true label catches that. This is what makes "sorting
+  accuracy" and "grasp success rate" two genuinely different numbers.
+- *Added `--perception-noise`.* Without it the benchmark reported 100% on
+  everything and carried no information: sim perception is ~1 mm accurate against
+  an 18 mm grasp tolerance, so there was no way for the scripted baseline to fail.
+  Injecting localisation error turns the benchmark into a sensitivity measurement
+  and, as a side effect, exercises the whole failure-reporting path end to end.
+  Default is 0.0, so the headline numbers stay honest.
+- *Every trial is its own seeded world* (`seed + i`), so trial-to-trial variance
+  is real scene variation rather than RNG drift, and any run is reproducible.
+- *Benchmark rows go into the same sort log* under a `bench-<mode>-<seed>` run id,
+  so the dashboard can show benchmark data without a second storage path.
+- *The dashboard's `main()` is guarded by `__name__ == "__main__"`.* Streamlit
+  runs the file as `__main__`, so it renders when served and stays importable for
+  the data-layer tests.
+- *`_environment()` uses `importlib.metadata`* rather than `__version__`
+  attributes, because PyBullet does not expose one.
+
+**Measured** (see `docs/results.md` for the full tables)
+
+- Scripted, 20 trials × 6 tubes = 120 tubes: **100% sorting accuracy, 100% grasp
+  success, 100% completion, 0.38 s ± 0.03 per sample**, 55.4 s wall clock, zero failures.
+- Noise sweep: fully robust to 5 mm localisation error; grasp success falls to
+  73.9% at 10 mm, 50.0% at 15 mm and 33.3% at 20 mm. Sorting accuracy holds at
+  100% until 20 mm, since position noise does not affect classification.
+- `samplesort dashboard` serves HTTP 200 and `/_stcore/health` returns `ok`.
+
+**Known issues**
+
+- Without injected noise the scripted baseline saturates, so the headline table
+  cannot distinguish a good controller from a perfect simulator. The noise sweep
+  exists to give the results page something falsifiable to say.

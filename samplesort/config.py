@@ -378,13 +378,21 @@ class ClassesConfig(_Base):
 
 
 class PipelineConfig(_Base):
-    """Runtime behaviour of the main sort loop."""
+    """Runtime behaviour of the main sort loop.
+
+    ``perception_noise_m`` injects zero-mean Gaussian error into each detection's
+    table position. It defaults to 0 and exists so the benchmark can sweep the
+    grasp-tolerance envelope: the simulator's perception is near-exact (~1 mm),
+    which is far better than a real rig achieves, so without it the scripted
+    baseline saturates at 100% and the numbers say nothing about robustness.
+    """
 
     control_mode: ControlMode = "scripted"
     max_iterations: int = Field(default=24, gt=0)
     grasp_retries: int = Field(default=1, ge=0)
     settle_steps: int = Field(default=60, ge=0)
     policy_path: Path | None = None
+    perception_noise_m: float = Field(default=0.0, ge=0.0)
 
 
 # ------------------------------------------------------------------------ bundle

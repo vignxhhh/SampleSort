@@ -20,3 +20,7 @@ pipeline:
   grasp_retries: 1             # extra attempts after a failed grasp
   settle_steps: 60             # sim steps to let the scene settle between jobs
   policy_path: null            # ACT checkpoint directory used when control_mode == learned
+  # Std-dev of Gaussian error injected into each detection's table position, in
+  # metres. 0 disables it. Used by `samplesort benchmark --perception-noise` to
+  # characterise how much localisation error the grasp tolerance absorbs.
+  perception_noise_m: 0.0

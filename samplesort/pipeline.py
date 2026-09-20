@@ -13,6 +13,8 @@ import time
 import uuid
 from dataclasses import dataclass, field, replace
 
+import numpy as np
+
 from samplesort.config import SampleSortConfig
 from samplesort.control.scripted import ExecutionResult, FailureReason, ScriptedController
 from samplesort.hal.factory import Backend
@@ -167,6 +169,7 @@ class SortPipeline:
         self.rack_state = RackState(config.workspace, config.classes)
         self.planner = TaskPlanner(config, self.rack_state)
         self.controller = controller or ScriptedController(config, backend.arm, backend.world)
+        self._noise_rng = np.random.default_rng(config.seed)
 
     # ------------------------------------------------------------- calibration
 
@@ -206,7 +209,23 @@ class SortPipeline:
         self.backend.arm.move_to_joints(self.config.arm.observe_position)
         if self.backend.world is not None:
             self.backend.world.step(self.config.pipeline.settle_steps)
-        return self.detector.detect_in_pickup_zone(self.backend.camera.read())
+        detections = self.detector.detect_in_pickup_zone(self.backend.camera.read())
+        return [self._jitter(d) for d in detections]
+
+    def _jitter(self, detection: Detection) -> Detection:
+        """Add the configured localisation noise to a detection.
+
+        A no-op unless ``pipeline.perception_noise_m`` is set. See
+        :class:`~samplesort.config.PipelineConfig` for why the knob exists.
+        """
+        sigma = self.config.pipeline.perception_noise_m
+        if sigma <= 0.0:
+            return detection
+        offset = self._noise_rng.normal(0.0, sigma, size=2)
+        return replace(
+            detection,
+            table_xy=(detection.table_xy[0] + offset[0], detection.table_xy[1] + offset[1]),
+        )
 
     def plan(self, detections: list[Detection]) -> PlanResult:
         """Turn detections into ordered jobs against the current rack state.

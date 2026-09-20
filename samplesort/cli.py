@@ -7,6 +7,8 @@ fast and works even when the optional learning stack is not installed.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -157,6 +159,105 @@ def run(
                 typer.echo(line)
 
     _exit_on_failure(report)
+
+
+@app.command("benchmark")
+def benchmark(
+    config_dir: ConfigDirOpt = None,
+    seed: SeedOpt = None,
+    trials: Annotated[int, typer.Option("--trials", "-t", help="Seeded trials to run.")] = 20,
+    num_tubes: Annotated[
+        int, typer.Option("--num-tubes", "-n", help="Tubes spawned per trial.")
+    ] = 6,
+    output_dir: Annotated[
+        Path | None, typer.Option("--output-dir", "-o", help="Where to write the artefacts.")
+    ] = None,
+    policy: Annotated[
+        Path | None,
+        typer.Option("--policy", help="Also benchmark this ACT checkpoint and compare."),
+    ] = None,
+    perception_noise_mm: Annotated[
+        float,
+        typer.Option(
+            "--perception-noise",
+            help="Std-dev of localisation noise to inject, in millimetres.",
+        ),
+    ] = 0.0,
+) -> None:
+    """Run seeded simulation trials and write the metrics JSON and Markdown table."""
+    from samplesort.benchmark import run_benchmark, write_report
+
+    cfg = _load(config_dir, seed)
+    cfg.pipeline.perception_noise_m = perception_noise_mm / 1000.0
+    destination = output_dir or cfg.output_dir
+
+    typer.echo(f"Running {trials} scripted trial(s) of {num_tubes} tubes each...")
+    scripted = run_benchmark(cfg, trials=trials, num_tubes=num_tubes, start_seed=cfg.seed)
+
+    comparison = None
+    if policy is not None:
+        typer.echo(f"Running {trials} learned trial(s) with {policy}...")
+        learned_cfg = cfg.model_copy(deep=True)
+        learned_cfg.pipeline.control_mode = "learned"
+        learned_cfg.pipeline.policy_path = policy
+
+        def make_learned(config: SampleSortConfig, backend: Backend) -> ScriptedController:
+            return _build_controller(config, backend)
+
+        comparison = run_benchmark(
+            learned_cfg,
+            trials=trials,
+            num_tubes=num_tubes,
+            start_seed=cfg.seed,
+            controller_factory=make_learned,
+        )
+
+    json_path, markdown_path = write_report(scripted, destination, comparison=comparison)
+    typer.echo("")
+    typer.echo(scripted.to_markdown(comparison=comparison))
+    typer.echo(f"Wrote {json_path}")
+    typer.echo(f"Wrote {markdown_path}")
+
+
+@app.command("dashboard")
+def dashboard(
+    config_dir: ConfigDirOpt = None,
+    port: Annotated[int, typer.Option("--port", "-p", help="Port to serve on.")] = 8501,
+    host: Annotated[str, typer.Option("--host", help="Address to bind.")] = "localhost",
+    headless: Annotated[
+        bool, typer.Option("--headless", help="Do not try to open a browser.")
+    ] = True,
+) -> None:
+    """Launch the Streamlit dashboard over the sort log."""
+    import subprocess
+
+    cfg = _load(config_dir)
+    app_path = Path(__file__).resolve().parent.parent / "dashboard" / "app.py"
+    if not app_path.is_file():
+        typer.secho(f"Dashboard app not found at {app_path}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    command = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        "--server.port",
+        str(port),
+        "--server.address",
+        host,
+        "--server.headless",
+        "true" if headless else "false",
+        "--browser.gatherUsageStats",
+        "false",
+    ]
+    typer.echo(f"Serving the SampleSort dashboard on http://{host}:{port}")
+    typer.echo(f"Reading the sort log at {cfg.database_path}")
+
+    environment = dict(os.environ)
+    environment["SAMPLESORT_CONFIG_DIR"] = str(cfg.config_dir)
+    raise typer.Exit(code=subprocess.call(command, env=environment))
 
 
 def _build_controller(cfg: SampleSortConfig, backend: Backend) -> ScriptedController:
