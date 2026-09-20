@@ -653,8 +653,12 @@ The workflow's exact steps in a pristine venv:
 ```
 
 Confirmed green on GitHub Actions on both the 3.10 and 3.11 matrix legs:
-[run #2](https://github.com/vignxhhh/SampleSort/actions/runs/35481076283)
-(`conclusion: success`).
+
+| Run | Commit | Conclusion |
+| --- | --- | --- |
+| [#1](https://github.com/vignxhhh/SampleSort/actions/runs/35480902335) | `1ba1b01` | failure — the 3.10 mypy error above |
+| [#2](https://github.com/vignxhhh/SampleSort/actions/runs/35481076283) | `b6a8979` | **success** |
+| [#3](https://github.com/vignxhhh/SampleSort/actions/runs/35481396681) | `7366d9d` (final polish) | **success** |
 
 ### AC7 — README explains the project, sim, hardware and results · **PASS**
 
