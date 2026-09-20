@@ -258,12 +258,15 @@ def _fit_homography(
     if len(pixels) < 4:
         raise CalibrationError(f"need at least 4 correspondences, got {len(pixels)}")
 
-    homography, _ = cv2.findHomography(
+    fitted, _ = cv2.findHomography(
         pixels.astype(np.float64), table_points.astype(np.float64), method=0
     )
-    if homography is None:
+    if fitted is None:
         raise CalibrationError("cv2.findHomography failed to fit the correspondences")
 
+    # OpenCV's return dtype varies across versions; pin it to float64 so the
+    # linear algebra below is well defined and typed.
+    homography = np.asarray(fitted, dtype=np.float64)
     calibration = Calibration(homography=homography, image_size=image_size, source=source)
 
     # Residual on the table plane: how far the fitted mapping misses in metres.

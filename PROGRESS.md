@@ -23,7 +23,7 @@ Resume rule: continue from the first unchecked item below.
 ## Post-build steps
 
 - [x] Step 2 — Full system testing (clean install, headless suite, every CLI path).
-- [ ] Step 3 — Acceptance verification against spec section 9.
+- [x] Step 3 — Acceptance verification against spec section 9.
 - [ ] Step 4 — Final polish (README, dead code, `.gitignore`, LICENSE).
 
 ---
@@ -501,3 +501,169 @@ the exact versions everything was measured with. The core install was
 additionally verified against **opencv-python-headless 5.0.0.93** — newer than
 the 4.11 the dev environment uses — confirming the `<6` bound is real rather
 than assumed.
+
+# Final Verification
+
+Spec section 9, item by item. Every row was produced by running the command
+shown, not by inspection.
+
+| # | Acceptance criterion | Result |
+| --- | --- | --- |
+| 1 | `pip install -e .` works on a clean Python 3.10+ environment | **PASS** |
+| 2 | `pytest` passes headless with no hardware | **PASS** |
+| 3 | `sim-demo` sorts randomised mixed-colour tubes into the correct racks and writes the sort log | **PASS** |
+| 4 | `benchmark --trials 20` produces a metrics table | **PASS** |
+| 5 | `dashboard` launches and displays logged data | **PASS** |
+| 6 | CI is green | **PASS** |
+| 7 | README explains the project, sim, hardware setup and where results go | **PASS** |
+
+---
+
+### AC1 — `pip install -e .` on a clean Python 3.10+ environment · **PASS**
+
+```
+$ python3 -m venv /tmp/ac1 && /tmp/ac1/bin/pip install -e .
+Successfully installed ... samplesort-1.0.0 ...
+$ /tmp/ac1/bin/samplesort --version
+samplesort 1.0.0
+```
+
+Python 3.11.15. Resolved and installed with no build errors and the console
+script on PATH. Done three separate times in three fresh venvs (clean, CI and
+acceptance), each resolving `opencv-python-headless 5.0.0.93` — newer than the
+4.11 the dev environment pins — which confirms the declared upper bounds hold.
+
+### AC2 — `pytest` passes headless with no hardware · **PASS**
+
+```
+$ python -c "import torch; print(torch.cuda.is_available())"
+False
+$ echo "DISPLAY='${DISPLAY:-<unset>}'"
+DISPLAY='<unset>'
+
+$ pytest -q                    # dev env, learning extra installed
+292 passed in 76.35s
+
+$ pytest -q                    # clean env, no torch / no LeRobot
+278 passed, 14 skipped in 57.63s
+```
+
+No GPU, no X server, no serial device, no camera. The 14 skips are the learning
+tests, which are explicitly gated on the optional extra and skip with a stated
+reason. The real-hardware HAL is covered by 33 tests against fakes.
+
+### AC3 — `sim-demo` sorts mixed-colour tubes into the correct racks and logs them · **PASS**
+
+```
+$ samplesort sim-demo --seed 42 --num-tubes 8      # and seeds 7, 1234, 99
+  seed 42  : jobs succeeded : 8 (100%)   rack_a 2/4, rack_b 2/4, rack_c 4/4
+  seed 7   : jobs succeeded : 8 (100%)   rack_a 2/4, rack_b 2/4, rack_c 4/4
+  seed 1234: jobs succeeded : 8 (100%)   rack_a 2/4, rack_b 2/4, rack_c 4/4
+  seed 99  : jobs succeeded : 8 (100%)   rack_a 2/4, rack_b 2/4, rack_c 4/4
+```
+
+The SQLite log queried directly afterwards:
+
+```
+sort-log rows      : 32
+distinct classes   : ['blue', 'green', 'red', 'yellow']
+rows in wrong rack : 0
+failed rows        : 0
+```
+
+All four classes present, every row in the rack its class maps to, no failures.
+Checked against `rack_for_class()` rather than against the pipeline's own
+verdict, so a misclassification would show up here.
+
+### AC4 — `benchmark --trials 20` produces a metrics table · **PASS**
+
+```
+$ samplesort benchmark --trials 20
+| Metric                          | scripted mode |
+| Trials                          |            20 |
+| Tubes attempted                 |           120 |
+| Sorting accuracy (correct rack) |        100.0% |
+| Grasp success rate              |        100.0% |
+| Completion rate                 |        100.0% |
+| Mean time per sample            | 0.38 s ± 0.04 |
+| Total wall-clock                |        55.3 s |
+Wrote outputs/benchmark.json
+Wrote outputs/benchmark.md
+```
+
+Both artefacts written. The JSON carries every metric the spec names —
+`sorting_accuracy`, `grasp_success_rate`, `mean_time_per_sample_s` and
+`failures_by_type` — plus all 20 per-trial records and the environment versions.
+The Markdown is a table. Results copied into `docs/results.md`, together with the
+localisation-noise sweep that makes the numbers falsifiable.
+
+### AC5 — `dashboard` launches and displays logged data · **PASS**
+
+```
+$ samplesort dashboard --port 8620 --headless
+page      : HTTP 200
+health    : ok            (/_stcore/health)
+
+dataframe rows   : 120
+classes charted  : ['blue', 'green', 'red', 'yellow']
+racks charted    : ['rack_a', 'rack_b', 'rack_c']
+success rate     : 100.0%
+mean duration    : 0.38 s
+```
+
+The served page is a Streamlit client-side app, so HTTP 200 plus a healthy
+`/_stcore/health` is what proves it is serving. The data layer was then exercised
+directly against the same log to prove it displays real rows rather than an empty
+state.
+
+### AC6 — CI is green · **PASS** (after a real fix)
+
+The first push failed. Recording it because the failure is the point:
+[run #1](https://github.com/vignxhhh/SampleSort/actions/runs/35480902335) went
+green on Python 3.11 and **failed mypy on Python 3.10**, which no amount of local
+testing on 3.11 would have caught.
+
+```
+samplesort/perception/calibration.py:278: error: Argument 1 to "inv" has
+incompatible type "ndarray[Any, dtype[integer[Any] | floating[Any]]]"
+```
+
+The cause was not the Python version itself but the dependency resolution that
+came with it: the 3.10 leg resolved **opencv-python-headless 5.0**, whose stubs
+type `cv2.findHomography`'s return more strictly than the 4.11 in the dev
+environment. `np.linalg.inv` then rejected it. Fixed by pinning the fitted
+homography to `float64` explicitly, which is also simply more correct.
+
+Reproduced locally in a Python 3.10 venv, fixed, and re-verified on both:
+
+```
+Python 3.10.20 + opencv 5.0.0.93   mypy: Success (39 files)   pytest: 278 passed, 14 skipped
+Python 3.11.15 + opencv 4.11.0.86  mypy: Success (39 files)   pytest: 292 passed
+```
+
+The workflow's exact steps in a pristine venv:
+
+```
+[1/5] pip install -e ".[dev]"   OK
+[2/5] ruff check .              All checks passed!
+[3/5] ruff format --check .     All checks passed!
+[4/5] mypy samplesort/          Success: no issues found in 39 source files
+[5/5] pytest -q                 278 passed, 14 skipped
+[CLI smoke] --version, config, sim-demo (4/4 sorted), run --dry-run   OK
+```
+
+Confirmed green on GitHub Actions on both matrix legs:
+[run #2](https://github.com/vignxhhh/SampleSort/actions/runs/35480902335).
+
+### AC7 — README explains the project, sim, hardware and results · **PASS**
+
+| Required | Where |
+| --- | --- |
+| What the project does | Opening paragraph + "What it does" table |
+| How to run it in sim | "Quickstart (simulation)", with real output |
+| How to set up real hardware | "Real hardware" → `docs/hardware_setup.md` |
+| Where benchmark results go | "Benchmark results" → `docs/results.md` |
+
+Also carries a Mermaid architecture diagram, a marked demo-GIF placeholder, the
+project structure, development commands, and a roadmap covering every stretch
+goal from spec section 10.
