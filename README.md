@@ -20,6 +20,11 @@ watch it sort in about two minutes.
 <!-- ============================================================= -->
 
 > **📽️ Demo GIF goes here** — see the comment above for how to record it.
+>
+> In the meantime, [`docs/web/`](docs/web/) is an interactive replay of a real
+> run — the exported trajectory rendered live in WebGL, alongside the sort log,
+> the detector and the benchmark. Serve it with
+> `python -m http.server 8000 --directory docs/web`.
 
 ---
 
