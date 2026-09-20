@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "samplesort"
+version = "1.0.0"
+description = "Vision-guided robotic arm system that automates lab sample sorting."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "SampleSort contributors" }]
+keywords = ["robotics", "manipulation", "imitation-learning", "lab-automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Version bounds are pinned to a range that has been verified to work together.
+# `constraints.txt` records the exact versions the shipped benchmark numbers and
+# the 290-test suite were produced with; install with
+#   pip install -e . -c constraints.txt
+# to reproduce that environment exactly.
+dependencies = [
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    # ArUco lives in the main opencv module from 4.7 onwards; verified on 4.11 and 5.0.
+    "opencv-python-headless>=4.9,<6",
+    "pybullet>=3.2.6,<4",
+    "pydantic>=2.6,<3",
+    "PyYAML>=6.0,<7",
+    "typer>=0.12,<1",
+    "streamlit>=1.32,<2",
+    "pandas>=2.0,<4",
+    "altair>=5.0,<7",
+]
+
+[project.optional-dependencies]
+learning = [
+    "torch>=2.2,<3",
+    "torchvision>=0.17,<1",
+    # LeRobot's dataset and policy APIs are not stable across minors; this code
+    # is written against 0.4.x and verified on 0.4.4.
+    "lerobot>=0.4,<0.5",
+]
+dev = [
+    "pytest>=8.0,<10",
+    "ruff>=0.5,<1",
+    "mypy>=1.9,<3",
+    "types-PyYAML>=6.0",
+]
+
+[project.scripts]
+samplesort = "samplesort.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vignxhhh/samplesort"
+Repository = "https://github.com/vignxhhh/samplesort"
+
+[tool.setuptools.packages.find]
+include = ["samplesort*", "dashboard*"]
+
+[tool.setuptools.package-data]
+samplesort = ["py.typed"]
+"samplesort.sim.assets" = ["*.urdf"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ARG", "RET", "PTH", "D"]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+    "B008",  # typer uses function calls in argument defaults by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test doubles must mirror the real signatures they stand in for, so unused
+# method and lambda arguments are expected there. ARG001 stays on, so a genuinely
+# unused fixture in a test function is still flagged.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "ARG002", "ARG005"]
+"scripts/*" = ["D100", "D103"]
+"dashboard/*" = ["D100", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_return_any = true
+strict_equality = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pybullet", "cv2", "lerobot.*", "torch.*", "streamlit", "altair"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "learning: marks tests that require the optional torch/LeRobot stack",
+]
+filterwarnings = ["ignore::DeprecationWarning"]

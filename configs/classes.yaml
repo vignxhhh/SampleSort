@@ -1,0 +1,43 @@
+# Sample categories keyed by cap colour, plus the rack each class is sorted into.
+#
+# HSV ranges use OpenCV conventions: H in [0, 179], S and V in [0, 255].
+# `hue_ranges` holds one or more intervals so wrap-around hues (red) work.
+classes:
+  - label: red
+    rack_id: rack_a
+    hue_ranges: [[0, 8], [172, 179]]
+    saturation_range: [110, 255]
+    value_range: [70, 255]
+    display_color: "#d64545"
+
+  - label: blue
+    rack_id: rack_b
+    hue_ranges: [[100, 130]]
+    saturation_range: [110, 255]
+    value_range: [60, 255]
+    display_color: "#4472d6"
+
+  - label: green
+    rack_id: rack_c
+    hue_ranges: [[45, 80]]
+    saturation_range: [90, 255]
+    value_range: [50, 255]
+    display_color: "#4aa35a"
+
+  - label: yellow
+    rack_id: rack_c
+    hue_ranges: [[22, 34]]
+    saturation_range: [110, 255]
+    value_range: [110, 255]
+    display_color: "#d6c045"
+
+# Detector tuning.
+detector:
+  min_area_px: 45              # ignore blobs smaller than this
+  max_area_px: 20000
+  blur_kernel: 5
+  morph_kernel: 3
+  min_confidence: 0.25
+
+# Stretch goal: read a printed sample ID from a QR code on the tube.
+qr_enabled: false

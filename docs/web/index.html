@@ -1,0 +1,2142 @@
+<title>SampleSort Operations Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg:#eef1ef; --surface:#ffffff; --surface-2:#f4f6f4; --surface-3:#e6ebe8;
+    --inset:#0d1310;
+    --rail:#111815; --rail-2:#182220; --rail-ink:#e2e9e4; --rail-ink-2:#8c9b93; --rail-line:#232e29;
+    --ink:#0d1210; --ink-2:#4e5b55; --ink-3:#83908a;
+    --line:#dce2de; --line-2:#c3ccc7;
+    --accent:#26418f; --accent-soft:#e7ebf6; --accent-line:#bcc7e4;
+    --good:#2f7d43; --good-soft:#e3f0e6; --good-line:#b4d6bd;
+    --warn:#95670f; --warn-soft:#f6eeda; --warn-line:#e0cda0;
+    --bad:#b03a2e; --bad-soft:#f8e8e5; --bad-line:#e8c3bc;
+    --c1:#7c5cd6; --c2:#0d9b9e; --c3:#d9782a;
+    --r:11px; --r-sm:7px;
+    --shadow:0 1px 2px rgba(13,18,16,.05), 0 10px 26px -18px rgba(13,18,16,.32);
+    --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0b100e; --surface:#141a17; --surface-2:#1a2220; --surface-3:#222b28;
+      --inset:#070b09;
+      --rail:#0a0f0d; --rail-2:#131b18; --rail-ink:#dfe7e2; --rail-ink-2:#7d8d85; --rail-line:#1d2724;
+      --ink:#e7ede9; --ink-2:#9aa8a1; --ink-3:#6c7a74;
+      --line:#222c28; --line-2:#36423d;
+      --accent:#93aaf5; --accent-soft:#1a2340; --accent-line:#2f3d64;
+      --good:#5cc47c; --good-soft:#12281a; --good-line:#234d31;
+      --warn:#d7a545; --warn-soft:#2a2210; --warn-line:#4e401d;
+      --bad:#e2705f; --bad-soft:#2d1613; --bad-line:#532a24;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 30px -18px rgba(0,0,0,.85);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0b100e; --surface:#141a17; --surface-2:#1a2220; --surface-3:#222b28;
+    --inset:#070b09;
+    --rail:#0a0f0d; --rail-2:#131b18; --rail-ink:#dfe7e2; --rail-ink-2:#7d8d85; --rail-line:#1d2724;
+    --ink:#e7ede9; --ink-2:#9aa8a1; --ink-3:#6c7a74;
+    --line:#222c28; --line-2:#36423d;
+    --accent:#93aaf5; --accent-soft:#1a2340; --accent-line:#2f3d64;
+    --good:#5cc47c; --good-soft:#12281a; --good-line:#234d31;
+    --warn:#d7a545; --warn-soft:#2a2210; --warn-line:#4e401d;
+    --bad:#e2705f; --bad-soft:#2d1613; --bad-line:#532a24;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 12px 30px -18px rgba(0,0,0,.85);
+  }
+
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:14.5px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4,p { margin:0; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  code { font-family:var(--mono); font-size:.86em; background:var(--surface-2);
+         border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  .num { font-variant-numeric:tabular-nums; }
+
+  /* ===================== app shell ===================== */
+  .app { display:grid; grid-template-columns:250px minmax(0,1fr); min-height:100%; }
+
+  .rail {
+    position:sticky; top:0; align-self:start;
+    height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    display:flex; flex-direction:column; gap:2px; overflow-y:auto;
+    background:var(--rail); color:var(--rail-ink); border-right:1px solid var(--rail-line);
+    padding:18px 14px 14px;
+  }
+  .brandbox { display:flex; align-items:center; gap:11px; padding:0 6px 16px; }
+  .mark {
+    width:34px; height:34px; border-radius:9px; flex:none; display:grid; place-items:center;
+    background:linear-gradient(150deg,#3f6a5c,#1d332c); border:1px solid #47645a;
+    font-family:var(--mono); font-size:12px; font-weight:600; color:#dff0e8; letter-spacing:-.04em;
+  }
+  .brandbox b { display:block; font-size:14.5px; font-weight:600; letter-spacing:-.01em; line-height:1.25; }
+  .brandbox span { display:block; font-family:var(--mono); font-size:10px; color:var(--rail-ink-2); }
+
+  .runcard {
+    background:var(--rail-2); border:1px solid var(--rail-line); border-radius:var(--r-sm);
+    padding:9px 11px; margin-bottom:16px;
+  }
+  .runcard .lbl { font-family:var(--mono); font-size:9px; letter-spacing:.14em;
+                  text-transform:uppercase; color:var(--rail-ink-2); }
+  .runcard .val { display:flex; align-items:center; gap:7px; font-family:var(--mono);
+                  font-size:11.5px; margin-top:3px; }
+  .runcard .val em { font-style:normal; margin-left:auto; color:var(--rail-ink-2); }
+
+  .railnav { display:flex; flex-direction:column; gap:1px; }
+  .navhead { font-family:var(--mono); font-size:9px; letter-spacing:.15em; text-transform:uppercase;
+             color:var(--rail-ink-2); padding:14px 8px 5px; }
+  .navhead:first-child { padding-top:2px; }
+  .navbtn {
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    font:inherit; font-size:13px; cursor:pointer; color:var(--rail-ink-2);
+    background:transparent; border:1px solid transparent; border-radius:var(--r-sm);
+    padding:7px 9px; transition:background .13s, color .13s;
+  }
+  .navbtn svg { width:15px; height:15px; flex:none; stroke:currentColor; fill:none;
+                stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .navbtn:hover { background:var(--rail-2); color:var(--rail-ink); }
+  .navbtn[aria-current="page"] { background:var(--rail-2); color:#fff; border-color:var(--rail-line); }
+  .navbtn .tag { margin-left:auto; font-family:var(--mono); font-size:9px; letter-spacing:.08em;
+                 text-transform:uppercase; color:var(--rail-ink-2); }
+  .navbtn[aria-current="page"] .tag { color:#7fd8a6; }
+
+  .railfoot { margin-top:auto; padding:14px 8px 0; border-top:1px solid var(--rail-line);
+              display:grid; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--rail-ink-2); }
+  .sysrow { display:flex; align-items:center; gap:8px; }
+  .dot { width:6px; height:6px; border-radius:50%; flex:none; background:var(--rail-ink-2); }
+  .dot.ok { background:#57c47a; box-shadow:0 0 0 3px rgba(87,196,122,.16); }
+  .railfoot a { color:var(--rail-ink-2); }
+  .railfoot a:hover { color:var(--rail-ink); }
+
+  /* ===================== topbar ===================== */
+  .main { min-width:0; display:flex; flex-direction:column; }
+  .topbar {
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    padding:13px clamp(16px,2.4vw,30px);
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
+  }
+  .crumb { font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+           color:var(--ink-3); }
+  .crumb b { color:var(--ink-2); font-weight:500; }
+  .topbar h1 { font-size:19px; font-weight:600; letter-spacing:-.018em; line-height:1.25; }
+  .topacts { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+  .pill {
+    display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10.5px;
+    border-radius:999px; padding:4px 11px; border:1px solid var(--line-2); color:var(--ink-2);
+    background:var(--surface);
+  }
+  .pill i { width:6px; height:6px; border-radius:50%; background:currentColor; flex:none; }
+  .pill.ok { color:var(--good); background:var(--good-soft); border-color:var(--good-line); }
+  .pill.warn { color:var(--warn); background:var(--warn-soft); border-color:var(--warn-line); }
+  .pill.bad { color:var(--bad); background:var(--bad-soft); border-color:var(--bad-line); }
+  .pill.info { color:var(--accent); background:var(--accent-soft); border-color:var(--accent-line); }
+
+  .iconbtn {
+    font:inherit; cursor:pointer; display:grid; place-items:center; width:31px; height:31px;
+    background:var(--surface); color:var(--ink-2); border:1px solid var(--line-2);
+    border-radius:var(--r-sm);
+  }
+  .iconbtn:hover { color:var(--ink); border-color:var(--ink-3); }
+  .iconbtn svg { width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:1.6;
+                 stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ===================== viewport ===================== */
+  .viewport { padding:22px clamp(16px,2.4vw,30px) 64px; display:grid; gap:20px; }
+  .view { display:grid; gap:20px; }
+  .view[hidden] { display:none !important; }
+  .lede { color:var(--ink-2); max-width:70ch; font-size:15px; }
+
+  /* ===================== kpi tiles ===================== */
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:12px; }
+  .kpi {
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+    padding:13px 15px 12px; display:grid; gap:3px; align-content:start;
+  }
+  .kpi .k { font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase;
+            color:var(--ink-3); display:flex; align-items:center; gap:6px; }
+  .kpi .v { font-size:27px; font-weight:600; letter-spacing:-.03em; line-height:1.15;
+            font-variant-numeric:tabular-nums; }
+  .kpi .s { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); }
+  .kpi .spark { margin-top:5px; }
+  .kpi .spark svg { width:100%; height:30px; display:block; overflow:visible; }
+
+  /* ===================== cards ===================== */
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+          box-shadow:var(--shadow); overflow:hidden; }
+  .card > .body { padding:17px 18px; }
+  .cardhead {
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:12px 16px; border-bottom:1px solid var(--line); background:var(--surface-2);
+  }
+  .cardhead h2 { font-size:14px; font-weight:600; letter-spacing:-.01em; }
+  .cardhead .sub { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); }
+  .cardhead .right { margin-left:auto; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .plain { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:17px 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .grid-wide { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width:900px) { .grid2, .grid-wide { grid-template-columns:1fr; } }
+  h3.sec { font-size:15px; font-weight:600; letter-spacing:-.012em; margin-bottom:5px; }
+  .muted { color:var(--ink-2); }
+  .note { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); line-height:1.6; }
+
+  /* ===================== 3d rig ===================== */
+  .stage3d { position:relative; background:var(--inset); aspect-ratio:16/8.5; }
+  @media (max-width:640px) { .stage3d { aspect-ratio:4/3; } }
+  #gl { width:100%; height:100%; display:block; touch-action:none; cursor:grab; }
+  #gl:active { cursor:grabbing; }
+  .overlay { position:absolute; inset:0; pointer-events:none; }
+  .hud {
+    position:absolute; top:11px; left:11px; font-family:var(--mono); font-size:10.5px;
+    color:#c9d6cf; background:rgba(7,11,9,.66); border:1px solid rgba(255,255,255,.1);
+    border-radius:8px; padding:9px 11px; line-height:1.75; backdrop-filter:blur(6px);
+  }
+  .hud b { color:#fff; font-weight:500; }
+  .hud .ok { color:#6fe09a; }
+  .camzone { position:absolute; top:11px; right:11px; display:flex; gap:5px; pointer-events:auto; }
+  .camzone button {
+    font:inherit; font-family:var(--mono); font-size:10.5px; cursor:pointer;
+    background:rgba(7,11,9,.66); color:#c9d6cf; border:1px solid rgba(255,255,255,.13);
+    border-radius:6px; padding:5px 10px; backdrop-filter:blur(6px);
+  }
+  .camzone button[aria-pressed="true"] { border-color:#7fd8a6; color:#fff; background:rgba(30,60,45,.7); }
+  .loading { position:absolute; inset:0; display:grid; place-items:center;
+             font-family:var(--mono); font-size:11.5px; color:#7d8d85; background:var(--inset); }
+  .transport { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+               padding:12px 16px; border-top:1px solid var(--line); }
+  button.ctl {
+    font:inherit; font-size:12.5px; cursor:pointer; background:var(--ink); color:var(--surface);
+    border:1px solid var(--ink); border-radius:var(--r-sm); padding:7px 15px; min-width:88px;
+  }
+  button.ctl:hover { opacity:.86; }
+  .seekwrap { flex:1 1 230px; display:grid; gap:5px; min-width:190px; }
+  input[type=range] { width:100%; accent-color:var(--accent); margin:0; }
+  .ticks { position:relative; height:16px; }
+  .tick { position:absolute; transform:translateX(-50%); font-family:var(--mono); font-size:9px;
+          color:var(--ink-3); top:0; cursor:pointer; pointer-events:auto; }
+  .tick i { display:block; width:7px; height:7px; border-radius:50%; margin:0 auto 2px; }
+  .tick.on { color:var(--ink); }
+  .timecode { font-family:var(--mono); font-size:11.5px; color:var(--ink-2);
+              font-variant-numeric:tabular-nums; min-width:118px; }
+  .speeds { display:flex; gap:3px; background:var(--surface-2); border:1px solid var(--line);
+            border-radius:var(--r-sm); padding:2px; }
+  .speeds button {
+    font:inherit; font-family:var(--mono); font-size:10.5px; cursor:pointer; background:transparent;
+    color:var(--ink-3); border:0; border-radius:5px; padding:4px 8px;
+  }
+  .speeds button[aria-pressed="true"] { background:var(--surface); color:var(--ink);
+                                        box-shadow:0 1px 2px rgba(0,0,0,.1); }
+  .toggles { display:flex; gap:14px; flex-wrap:wrap; padding:0 16px 13px;
+             font-family:var(--mono); font-size:11px; color:var(--ink-2); }
+  .toggles label { display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .toggles input { accent-color:var(--accent); }
+
+  /* ===================== tables ===================== */
+  .tablewrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; font-size:13px; min-width:460px; }
+  th { font-family:var(--mono); font-size:9.5px; font-weight:500; letter-spacing:.11em;
+       text-transform:uppercase; color:var(--ink-3); text-align:left;
+       padding:9px 14px; background:var(--surface-2); border-bottom:1px solid var(--line);
+       }
+  td { padding:9px 14px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums;
+       color:var(--ink-2); }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover td { background:var(--surface-2); }
+  td.m { font-family:var(--mono); font-size:12px; }
+  td.strong { color:var(--ink); font-weight:500; }
+  .swatch { display:inline-flex; align-items:center; gap:7px; }
+  .swatch i { width:9px; height:9px; border-radius:50%; flex:none; box-shadow:0 0 0 1px rgba(0,0,0,.12) inset; }
+
+  /* ===================== stages ===================== */
+  .stages { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media (max-width:760px) { .stages { grid-template-columns:repeat(2,1fr); } }
+  .stage { text-align:left; cursor:pointer; font:inherit; color:var(--ink-2);
+           background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm);
+           padding:11px 12px; transition:border-color .14s, background .14s, color .14s; }
+  .stage:hover { border-color:var(--line-2); color:var(--ink); }
+  .stage[aria-selected="true"] { border-color:var(--ink); background:var(--surface); color:var(--ink); }
+  .stage .n { font-family:var(--mono); font-size:9px; letter-spacing:.12em; color:var(--ink-3);
+              display:block; margin-bottom:3px; }
+  .stage[aria-selected="true"] .n { color:var(--accent); }
+  .stage .t { font-size:14px; font-weight:600; letter-spacing:-.01em; }
+  .stagebody { border-left:2px solid var(--ink); padding-left:15px; margin-top:16px; }
+  .stagebody h3 { font-size:15px; font-weight:600; margin-bottom:5px; letter-spacing:-.012em; }
+  .stagebody p { max-width:72ch; }
+  .stagebody .files { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); margin-top:8px; }
+
+  /* ===================== detector lab ===================== */
+  .inset { background:var(--inset); border-radius:var(--r-sm); overflow:hidden; display:block; line-height:0; }
+  .inset canvas { width:100%; display:block; height:auto; }
+  figure { margin:0; }
+  figcaption { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); margin-top:10px; line-height:1.6; }
+  .ctrl { display:grid; gap:14px; }
+  .slider label { display:flex; justify-content:space-between; gap:10px; font-family:var(--mono);
+                  font-size:10.5px; color:var(--ink-2); margin-bottom:5px; }
+  .slider label b { color:var(--ink); font-weight:500; font-variant-numeric:tabular-nums; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { font:inherit; font-family:var(--mono); font-size:10.5px; cursor:pointer;
+          display:inline-flex; align-items:center; gap:6px; background:var(--surface-2);
+          color:var(--ink); border:1px solid var(--line-2); border-radius:999px; padding:4px 11px 4px 8px; }
+  .chip[aria-pressed="false"] { opacity:.4; }
+  .chip i { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .verdict { font-family:var(--mono); font-size:11.5px; padding:10px 12px; border-radius:var(--r-sm);
+             border:1px solid var(--line-2); background:var(--surface-2); }
+  .verdict b { font-size:15px; }
+  .verdict.good { border-color:var(--good-line); background:var(--good-soft); color:var(--good); }
+  .verdict.bad { border-color:var(--bad-line); background:var(--bad-soft); color:var(--bad); }
+  .presets { display:flex; gap:6px; flex-wrap:wrap; }
+  .presets button { font:inherit; font-family:var(--mono); font-size:10px; cursor:pointer;
+                    background:transparent; color:var(--ink-2); border:1px dashed var(--line-2);
+                    border-radius:5px; padding:4px 9px; }
+  .presets button:hover { color:var(--ink); border-style:solid; }
+  .kicker { font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase;
+            color:var(--ink-3); }
+
+  /* ===================== map & chart ===================== */
+  #map { width:100%; height:auto; display:block; }
+  #map text { font-family:var(--mono); font-size:9px; fill:var(--ink-3); }
+  .maptip { font-family:var(--mono); font-size:11px; color:var(--ink-2); background:var(--surface-2);
+            border:1px solid var(--line); border-radius:var(--r-sm); padding:11px 13px; min-height:80px; }
+  .maptip b { color:var(--ink); }
+  .chartwrap { position:relative; }
+  #chart { width:100%; height:auto; display:block; overflow:visible; }
+  #chart text { font-family:var(--mono); font-size:9.5px; fill:var(--ink-3); }
+  #chart .dl { font-size:10px; font-weight:700; }
+  .legend { display:flex; gap:15px; flex-wrap:wrap; margin-bottom:12px; }
+  .legend span { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono);
+                 font-size:11px; color:var(--ink-2); }
+  .legend i { width:14px; height:3px; border-radius:2px; }
+  .tip { position:absolute; pointer-events:none; opacity:0; transition:opacity .1s;
+         background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-sm);
+         padding:9px 11px; font-family:var(--mono); font-size:10.5px; box-shadow:var(--shadow);
+         white-space:nowrap; z-index:5; }
+  .tip b { display:block; margin-bottom:5px; color:var(--ink); }
+  .tip div { display:flex; align-items:center; gap:7px; color:var(--ink-2); }
+  .tip i { width:9px; height:3px; border-radius:2px; }
+  details { margin-top:14px; }
+  summary { font-family:var(--mono); font-size:11px; color:var(--ink-2); cursor:pointer; padding:5px 0; }
+
+  /* ===================== misc ===================== */
+  ul.clean { margin:0; padding-left:18px; }
+  ul.clean li { margin-bottom:8px; max-width:68ch; color:var(--ink-2); }
+  ul.clean li b { color:var(--ink); font-weight:600; }
+  pre { font-family:var(--mono); font-size:12px; background:var(--inset); color:#cfdad4;
+        border-radius:var(--r-sm); padding:15px 17px; overflow-x:auto; margin:0; line-height:1.75; }
+  pre .p { color:#5e6d66; user-select:none; }
+  pre .c { color:#7b8d84; }
+  .meter { height:5px; border-radius:3px; background:var(--surface-3); overflow:hidden; margin-top:7px; }
+  .meter i { display:block; height:100%; border-radius:3px; background:var(--good); }
+  .rackgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px; }
+  .rackcard { background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm);
+              padding:11px 13px; }
+  .rackcard .rname { display:flex; align-items:center; gap:7px; font-family:var(--mono);
+                     font-size:11px; color:var(--ink); }
+  .rackcard .rfill { font-size:20px; font-weight:600; letter-spacing:-.02em; margin-top:4px;
+                     font-variant-numeric:tabular-nums; }
+  .rackcard .rsub { font-family:var(--mono); font-size:10px; color:var(--ink-3); }
+  .slots { display:flex; gap:4px; margin-top:8px; }
+  .slots i { flex:1; height:16px; border-radius:3px; border:1px solid var(--line-2);
+             background:var(--surface); }
+
+  @media (max-width:960px) {
+    .app { grid-template-columns:1fr; }
+    .rail { position:static; height:auto; flex-direction:column; border-right:0;
+            border-bottom:1px solid var(--rail-line); padding:14px 16px 10px; }
+    .railnav { flex-direction:row; overflow-x:auto; gap:5px; padding-bottom:4px; }
+    .navhead { display:none; }
+    .navbtn { width:auto; white-space:nowrap; padding:6px 11px; }
+    .navbtn .tag { display:none; }
+    .railfoot { margin-top:12px; grid-auto-flow:column; justify-content:start; gap:16px;
+                overflow-x:auto; padding-top:10px; }
+    .runcard { margin-bottom:12px; }
+  }
+
+  /* ===================== motion & liveness ===================== */
+  @keyframes rise { from { opacity:.35; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  @keyframes pulsering {
+    0%   { box-shadow:0 0 0 0 rgba(87,196,122,.45); }
+    70%  { box-shadow:0 0 0 7px rgba(87,196,122,0); }
+    100% { box-shadow:0 0 0 0 rgba(87,196,122,0); }
+  }
+  @keyframes sweep { from { transform:translateX(-100%); } to { transform:translateX(320%); } }
+
+  .view > * { animation:rise .42s cubic-bezier(.22,.7,.3,1) backwards; }
+  .view > *:nth-child(2) { animation-delay:.05s; }
+  .view > *:nth-child(3) { animation-delay:.10s; }
+  .view > *:nth-child(4) { animation-delay:.15s; }
+  .view > *:nth-child(n+5) { animation-delay:.20s; }
+  .kpis .kpi { animation:rise .45s cubic-bezier(.22,.7,.3,1) backwards; }
+  .kpis .kpi:nth-child(2) { animation-delay:.06s; }
+  .kpis .kpi:nth-child(3) { animation-delay:.12s; }
+  .kpis .kpi:nth-child(4) { animation-delay:.18s; }
+  .kpis .kpi:nth-child(5) { animation-delay:.24s; }
+
+  .kpi { transition:border-color .18s, transform .18s; }
+  .kpi:hover { border-color:var(--line-2); transform:translateY(-2px); }
+  .navbtn { position:relative; }
+  .navbtn[aria-current="page"]::before {
+    content:""; position:absolute; left:-14px; top:50%; width:3px; height:18px;
+    border-radius:0 3px 3px 0; background:#7fd8a6; transform:translateY(-50%);
+  }
+  body.is-playing .dot.ok { animation:pulsering 1.9s ease-out infinite; }
+  body.is-playing .tag.live { color:#7fd8a6; }
+
+  /* live run progress in the rail */
+  .runbar { height:4px; border-radius:2px; background:var(--rail-line); margin-top:8px;
+            overflow:hidden; position:relative; }
+  .runbar i { display:block; height:100%; width:0%; border-radius:2px;
+              background:linear-gradient(90deg,#3f8f6c,#7fd8a6); transition:width .09s linear; }
+  .runmeta { display:flex; justify-content:space-between; font-family:var(--mono);
+             font-size:9.5px; color:var(--rail-ink-2); margin-top:5px;
+             font-variant-numeric:tabular-nums; }
+
+  /* the phase the controller is actually in, derived from the frame */
+  #phasepill { min-width:150px; justify-content:center; transition:color .2s, background .2s, border-color .2s; }
+
+  /* sort-log rows track the replay */
+  tbody tr.logrow { cursor:pointer; transition:background .15s; }
+  tbody tr.logrow td:first-child { position:relative; }
+  tbody tr.logrow.done td { color:var(--ink-3); }
+  tbody tr.logrow.now td { background:var(--good-soft); color:var(--ink); }
+  tbody tr.logrow.now td:first-child::before {
+    content:""; position:absolute; left:0; top:4px; bottom:4px; width:3px;
+    border-radius:0 2px 2px 0; background:var(--good);
+  }
+  tbody tr.detrow { cursor:crosshair; }
+
+  /* detector blob spotlight, driven from the detections table */
+  .camwrap { position:relative; }
+  .blobmark {
+    position:absolute; width:46px; height:46px; margin:-23px 0 0 -23px; border-radius:50%;
+    border:2px solid #fff; box-shadow:0 0 0 2px rgba(0,0,0,.45), 0 0 18px rgba(255,255,255,.5);
+    opacity:0; transition:opacity .16s, transform .16s; transform:scale(.6); pointer-events:none;
+  }
+  .blobmark.on { opacity:1; transform:scale(1); }
+
+  /* live tool position on the workspace map */
+  #map .toolpath { fill:none; stroke:var(--accent); stroke-width:2.5; opacity:.5;
+                   stroke-linecap:round; stroke-linejoin:round; }
+  #map .tooldot { fill:var(--accent); stroke:var(--surface); stroke-width:3; }
+  #map .toolhalo { fill:var(--accent); opacity:.18; }
+
+  .card { transition:box-shadow .2s, border-color .2s; }
+  .cardhead .right .pill { transition:transform .18s; }
+  button.ctl, .iconbtn, .chip, .stage, .presets button, .speeds button, .camzone button {
+    transition:transform .12s, background .15s, color .15s, border-color .15s, opacity .15s;
+  }
+  button.ctl:active, .iconbtn:active, .chip:active, .presets button:active { transform:scale(.96); }
+  .navbtn:active { transform:translateX(2px); }
+
+  /* skeleton shimmer until the trajectory lands */
+  .loading::after {
+    content:""; position:absolute; top:0; bottom:0; width:28%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);
+    animation:sweep 1.5s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition:none !important; animation:none !important; }
+    .view > *, .kpis .kpi { opacity:1 !important; transform:none !important; }
+  }
+</style>
+
+<div class="app">
+
+  <aside class="rail">
+    <div class="brandbox">
+      <div class="mark">SS</div>
+      <div>
+        <b>SampleSort</b>
+        <span>v1.0 &middot; simulation build</span>
+      </div>
+    </div>
+
+    <div class="runcard">
+      <div class="lbl">Active run</div>
+      <div class="val"><span class="dot ok"></span>seed 42 &middot; 8 tubes<em id="railFrames">460 f</em></div>
+      <div class="runbar"><i id="runbar"></i></div>
+      <div class="runmeta"><span id="runframe">frame 000</span><span id="runplaced">0 placed</span></div>
+    </div>
+
+    <nav class="railnav" aria-label="Console sections">
+      <p class="navhead">Operations</p>
+      <button class="navbtn" data-view="overview" aria-current="page">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        Overview<span class="tag live" id="tagLive">live</span>
+      </button>
+      <button class="navbtn" data-view="log">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="11" cy="19" r="1.6"/></svg>
+        Sort log<span class="tag" id="tagLog">0/8</span>
+      </button>
+
+      <p class="navhead">Subsystems</p>
+      <button class="navbtn" data-view="perception">
+        <svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+        Perception
+      </button>
+      <button class="navbtn" data-view="workspace">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>
+        Workspace
+      </button>
+      <button class="navbtn" data-view="robust">
+        <svg viewBox="0 0 24 24"><path d="M3 18 8.5 11l4 3.5L21 5"/><path d="M15 5h6v6"/></svg>
+        Robustness
+      </button>
+
+      <p class="navhead">Reference</p>
+      <button class="navbtn" data-view="status">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/></svg>
+        Status &amp; limits
+      </button>
+      <button class="navbtn" data-view="run">
+        <svg viewBox="0 0 24 24"><path d="M4 17l5-5-5-5"/><path d="M12 19h8"/></svg>
+        Run it yourself
+      </button>
+    </nav>
+
+    <div class="railfoot">
+      <div class="sysrow"><i class="dot ok"></i>CI green &middot; 291 tests</div>
+      <div class="sysrow"><i class="dot ok"></i><span id="railFk">kinematics&hellip;</span></div>
+      <a href="https://github.com/vignxhhh/SampleSort" target="_blank" rel="noopener">Source on GitHub &#8599;</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="crumb">SampleSort / <b id="crumb">Overview</b></p>
+        <h1 id="viewtitle">Operations overview</h1>
+      </div>
+      <div class="topacts">
+        <span class="pill ok"><i></i><span id="fkbadge">verifying kinematics&hellip;</span></span>
+        <button class="iconbtn" id="themebtn" type="button" aria-label="Switch colour theme" title="Switch colour theme">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="viewport">
+
+      <!-- ============================ OVERVIEW ============================ -->
+      <section class="view" data-view="overview">
+        <p class="lede">
+          A five-axis arm reads a tray of capped sample tubes with an overhead camera and files
+          each one into the rack its cap colour belongs to, writing a row to an append-only log
+          for every attempt. Everything below is the simulator's own recorded run &mdash; not a
+          video, not a mock-up.
+        </p>
+
+        <div class="kpis">
+          <div class="kpi">
+            <span class="k">Tubes filed</span>
+            <span class="v" data-count="8" data-suf=" / 8">0 / 8</span>
+            <span class="s">seed 42 &middot; single pass</span>
+          </div>
+          <div class="kpi">
+            <span class="k">Sorting accuracy</span>
+            <span class="v" data-count="100" data-suf="%">0%</span>
+            <span class="s">120 / 120 over 20 trials</span>
+          </div>
+          <div class="kpi">
+            <span class="k">Mean logged cycle</span>
+            <span class="v" data-count="0.53" data-dec="2" data-suf=" s">0.00 s</span>
+            <span class="s">per tube, sort_log.duration_s</span>
+          </div>
+          <div class="kpi">
+            <span class="k">Kinematics agreement</span>
+            <span class="v" id="kpiFk">&mdash;</span>
+            <span class="s">worst of 460 frames, live</span>
+          </div>
+          <div class="kpi">
+            <span class="k">Grasp vs. noise</span>
+            <span class="v" data-count="18" data-suf=" mm">0 mm</span>
+            <span class="s">tolerance before failure</span>
+            <span class="spark">
+              <svg viewBox="0 0 100 30" role="img" aria-label="Grasp success falls from 100% at 0 mm of injected noise to 33% at 20 mm.">
+                <path d="M3 4 L26 4 L50 10.3 L73 16 L96 20 L96 30 L3 30 Z" fill="var(--c2)" opacity="0.13"/>
+                <path d="M3 4 L26 4 L50 10.3 L73 16 L96 20" fill="none" stroke="var(--c2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="96" cy="20" r="3" fill="var(--c2)" stroke="var(--surface)" stroke-width="2"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <h2>Cell replay</h2>
+            <span class="sub">460 frames &middot; 12 Hz &middot; exported from PyBullet</span>
+            <div class="right">
+              <span class="pill" id="phasepill"><i></i>standing by</span>
+              <span class="pill info"><i></i>drag to orbit</span>
+            </div>
+          </div>
+          <div class="stage3d">
+            <canvas id="gl"></canvas>
+            <div class="overlay">
+              <div class="hud" id="hud">initialising&hellip;</div>
+              <div class="camzone">
+                <button data-cam="orbit" aria-pressed="true">Orbit</button>
+                <button data-cam="top" aria-pressed="false">Camera view</button>
+                <button data-cam="front" aria-pressed="false">Front</button>
+              </div>
+            </div>
+            <div class="loading" id="loading">loading trajectory&hellip;</div>
+          </div>
+          <div class="transport">
+            <button class="ctl" id="play">&#9654; Play</button>
+            <div class="seekwrap">
+              <input type="range" id="seek" min="0" max="459" value="0" step="1" aria-label="Scrub the run">
+              <div class="ticks" id="ticks"></div>
+            </div>
+            <div class="speeds" role="group" aria-label="Playback speed">
+              <button data-sp="0.5" aria-pressed="false">0.5&times;</button>
+              <button data-sp="1" aria-pressed="true">1&times;</button>
+              <button data-sp="2" aria-pressed="false">2&times;</button>
+              <button data-sp="4" aria-pressed="false">4&times;</button>
+            </div>
+            <span class="timecode" id="timecode">0.00 s &middot; 001/460</span>
+          </div>
+          <div class="toggles">
+            <label><input type="checkbox" id="tTrail" checked> tool path</label>
+            <label><input type="checkbox" id="tZone" checked> pickup zone</label>
+            <label><input type="checkbox" id="tReach"> reach envelope</label>
+            <label><input type="checkbox" id="tShadow" checked> shadows</label>
+          </div>
+        </div>
+
+        <div class="plain">
+          <h3 class="sec">Why that number in the header is the whole point</h3>
+          <p class="muted" style="max-width:74ch">
+            The viewer rebuilds the arm from the same joint frames the generated URDF declares,
+            then checks its own tool-centre position against the analytic forward kinematics
+            Python exported for every one of the 460 frames. The figure in the status pill is the
+            live worst-case disagreement, recomputed in your browser on load. If this page had
+            drifted from the simulation it would say so here rather than quietly look plausible.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <h2>Pipeline</h2>
+            <span class="sub">four stages, end to end</span>
+          </div>
+          <div class="body">
+            <div class="stages" role="tablist" aria-label="Pipeline stages">
+              <button class="stage" role="tab" aria-selected="true" data-s="0"><span class="n">STAGE 01</span><span class="t">Perceive</span></button>
+              <button class="stage" role="tab" aria-selected="false" data-s="1"><span class="n">STAGE 02</span><span class="t">Decide</span></button>
+              <button class="stage" role="tab" aria-selected="false" data-s="2"><span class="n">STAGE 03</span><span class="t">Act</span></button>
+              <button class="stage" role="tab" aria-selected="false" data-s="3"><span class="n">STAGE 04</span><span class="t">Record</span></button>
+            </div>
+            <div class="stagebody" id="stagebody"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ SORT LOG ============================ -->
+      <section class="view" data-view="log" hidden>
+        <p class="lede">
+          Every attempt writes one row: what was picked, where it went, how long it took and why
+          it failed when it did. The table is append-only, because that is the right shape for a
+          chain-of-custody record. These eight rows are the run playing on the overview.
+        </p>
+        <div class="kpis">
+          <div class="kpi"><span class="k">Attempted</span><span class="v">8</span><span class="s">jobs planned</span></div>
+          <div class="kpi"><span class="k">Succeeded</span><span class="v" style="color:var(--good)">8</span><span class="s">no retries needed</span></div>
+          <div class="kpi"><span class="k">Failed</span><span class="v">0</span><span class="s">grasp_missed &times;0</span></div>
+          <div class="kpi"><span class="k">Racks touched</span><span class="v">3</span><span class="s">A, B and C</span></div>
+        </div>
+        <div class="card">
+          <div class="cardhead">
+            <h2>sort_log</h2>
+            <span class="sub">SQLite &middot; run_id 1 &middot; append-only</span>
+            <div class="right"><span class="pill ok"><i></i>8 of 8 complete</span></div>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>Class</th><th>Destination</th><th>Slot</th>
+                <th>Picked</th><th>Placed</th><th>Cycle</th><th>Status</th>
+              </tr></thead>
+              <tbody id="logtable"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="note">
+          Picked and placed are read out of the trajectory itself &mdash; the frames where the
+          grasp constraint attaches and releases &mdash; so cycle is grasp-to-release on the
+          replay's 12&nbsp;Hz clock. That is a different clock from the 0.53&nbsp;s mean above,
+          which is the controller's own measured duration as written to sort_log.
+        </p>
+      </section>
+
+      <!-- =========================== PERCEPTION =========================== -->
+      <section class="view" data-view="perception" hidden>
+        <p class="lede">
+          The overhead frame goes through HSV colour masking, a 3&times;3 open, contour analysis
+          and an area filter. Drag the thresholds below and watch detection fall apart &mdash;
+          this runs the real chain, on the real frame, in your browser.
+        </p>
+        <div class="grid-wide">
+          <div class="card">
+            <div class="cardhead">
+              <h2>Detector</h2>
+              <span class="sub">640 &times; 480 &middot; live re-run</span>
+            </div>
+            <div class="body">
+              <figure>
+                <div class="inset camwrap"><canvas id="cam" width="640" height="480"></canvas>
+                  <span class="blobmark" id="blobmark"></span></div>
+                <figcaption>
+                  A faithful re-implementation of the HSV mask &rarr; 3&times;3 open &rarr; contour
+                  &rarr; area filter chain, minus the Gaussian pre-blur. Checked against the Python
+                  original: identical counts at all three presets.
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardhead"><h2>Thresholds</h2><span class="sub">configs/classes.yaml</span></div>
+            <div class="body">
+              <div class="ctrl">
+                <div class="verdict" id="verdict">Loading frame&hellip;</div>
+                <div class="slider"><label for="sat">Saturation floor <b id="satv">110</b></label>
+                  <input type="range" id="sat" min="0" max="255" value="110"></div>
+                <div class="slider"><label for="val">Brightness floor <b id="valv">70</b></label>
+                  <input type="range" id="val" min="0" max="255" value="70"></div>
+                <div class="slider"><label for="hue">Hue window &plusmn; <b id="huev">0</b></label>
+                  <input type="range" id="hue" min="-12" max="24" value="0"></div>
+                <div class="slider"><label for="area">Min blob area (px) <b id="areav">45</b></label>
+                  <input type="range" id="area" min="4" max="400" value="45"></div>
+                <div>
+                  <span class="kicker" style="display:block;margin-bottom:8px">Classes</span>
+                  <div class="chips" id="chips"></div>
+                </div>
+                <div class="presets">
+                  <button data-preset="ship">Shipped config</button>
+                  <button data-preset="loose">Too permissive</button>
+                  <button data-preset="strict">Too strict</button>
+                </div>
+                <p class="note">
+                  The interesting one is saturation floor: drop it and the grey rack plates start
+                  reading as tubes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="cardhead">
+            <h2>Detections</h2>
+            <span class="sub">pixel centroid &rarr; table coordinate, parallax corrected</span>
+            <div class="right"><span class="pill ok"><i></i>8 found, 8 expected</span></div>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>Class</th><th>u, v (px)</th><th>Area</th>
+                <th>Confidence</th><th>x (mm)</th><th>y (mm)</th>
+              </tr></thead>
+              <tbody id="dettable"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="note">
+          Caps sit 52&nbsp;mm above the plane the calibration homography is fitted on, so each
+          reading is pulled back toward the camera's nadir by <code>(H&minus;h)/H</code>. Without
+          that correction positions are out by 4&ndash;10&nbsp;mm &mdash; against an 18&nbsp;mm
+          grasp tolerance.
+        </p>
+      </section>
+
+      <!-- =========================== WORKSPACE ============================ -->
+      <section class="view" data-view="workspace" hidden>
+        <p class="lede">
+          Every coordinate here is read live from the same export the replay uses, which came
+          from <code>configs/workspace.yaml</code>. Millimetres, in the arm's base frame. Hover
+          or tap anything on the map.
+        </p>
+        <div class="grid-wide">
+          <div class="card">
+            <div class="cardhead"><h2>Bench layout</h2><span class="sub">top-down &middot; mm</span></div>
+            <div class="body">
+              <svg id="map" viewBox="-40 -260 460 520" role="img"
+                   aria-label="Top-down map of the workspace: pickup zone, three racks and the arm's reach arc."></svg>
+            </div>
+          </div>
+          <div style="display:grid;gap:16px">
+            <div class="plain">
+              <span class="kicker" style="display:block;margin-bottom:9px">Inspector</span>
+              <div class="maptip" id="maptip"><b>Hover an element</b><br>Its real coordinates appear here.</div>
+            </div>
+            <div class="plain">
+              <h3 class="sec">Rack occupancy</h3>
+              <div class="rackgrid" id="rackgrid"></div>
+              <p class="note" style="margin-top:11px">
+                Green and yellow share Rack&nbsp;C, which is why it fills to 4/4 while A and B
+                stop at 2/4. That mapping is one line of config per class.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================== ROBUSTNESS =========================== -->
+      <section class="view" data-view="robust" hidden>
+        <p class="lede">
+          100% on every metric is a suspicious number, so the benchmark can inject localisation
+          error to find the edge. The gripper's horizontal tolerance is 18&nbsp;mm, and that is
+          exactly where the curve turns.
+        </p>
+        <div class="card">
+          <div class="cardhead">
+            <h2>Injected localisation noise</h2>
+            <span class="sub">10 trials &times; 6 tubes per point</span>
+          </div>
+          <div class="body">
+            <div class="legend">
+              <span><i style="background:var(--c1)"></i>Sorting accuracy</span>
+              <span><i style="background:var(--c2)"></i>Grasp success</span>
+              <span><i style="background:var(--c3)"></i>Completion rate</span>
+            </div>
+            <div class="chartwrap">
+              <svg id="chart" viewBox="0 0 640 300" role="img"
+                   aria-label="Line chart: as injected localisation noise rises from 0 to 20 millimetres, grasp success falls from 100 to 33 percent and completion from 100 to 53 percent, while sorting accuracy holds at 100 percent until 20 millimetres."></svg>
+              <div class="tip" id="ctip"></div>
+            </div>
+            <details><summary>Show the numbers as a table</summary>
+              <div class="tablewrap" style="margin-top:10px">
+                <table><thead><tr><th>Noise &sigma;</th><th>Sorting accuracy</th><th>Grasp success</th><th>Completion</th><th>Failures</th></tr></thead>
+                <tbody id="noisetable"></tbody></table>
+              </div>
+            </details>
+          </div>
+        </div>
+        <p class="note">
+          Sorting accuracy holds until 20&nbsp;mm because position error does not change what
+          colour a cap is. The grasp breaks first; the decision does not.
+        </p>
+      </section>
+
+      <!-- =========================== STATUS =============================== -->
+      <section class="view" data-view="status" hidden>
+        <p class="lede">Straight answers about what has actually been measured and what has not.</p>
+        <div class="grid2">
+          <div class="card">
+            <div class="cardhead">
+              <h2>Real and measured</h2>
+              <div class="right"><span class="pill ok"><i></i>verified</span></div>
+            </div>
+            <div class="body">
+              <ul class="clean">
+                <li>The viewer's kinematics agree with the simulation's to <b id="fkinline">picometres</b> across all 460 frames.</li>
+                <li>Closed-form IK round-trips against forward kinematics to <b>3&times;10&#8315;&#185;&#8310;&nbsp;m</b>.</li>
+                <li><b>120 / 120</b> tubes into the correct rack across 20 seeded trials.</li>
+                <li>Detection error <b>&asymp;1&nbsp;mm</b> against an 18&nbsp;mm grasp tolerance.</li>
+                <li><b>291 tests</b>, green on Python 3.10 and 3.11 in CI, with no GPU and no hardware.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardhead">
+              <h2>Not yet proven</h2>
+              <div class="right"><span class="pill warn"><i></i>needs hardware</span></div>
+            </div>
+            <div class="body">
+              <ul class="clean">
+                <li><b>No physical arm has ever run this.</b> The SO-101 driver is written against LeRobot's real API and covered by 33 tests against fakes &mdash; the serial link itself is untested.</li>
+                <li>Grasping in simulation is <b>constraint-based, not friction-based</b>. Real tubes slip; these do not.</li>
+                <li>Colour thresholds are tuned to the renderer. Real lighting will need retuning.</li>
+                <li>The ACT policy pipeline runs end to end but was never trained properly &mdash; that was out of scope, not a result.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================== RUN ================================== -->
+      <section class="view" data-view="run" hidden>
+        <p class="lede">The seed pins the layout, so you get the run on the overview, exactly.</p>
+        <div class="grid2">
+          <div class="card">
+            <div class="cardhead"><h2>Two commands</h2><span class="sub">Python 3.10 or 3.11</span></div>
+            <div class="body">
+<pre><span class="p">$</span> pip install -e .
+<span class="p">$</span> samplesort sim-demo --seed 42 --num-tubes 8</pre>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardhead"><h2>Also worth a look</h2><span class="sub">CLI</span></div>
+            <div class="body">
+<pre><span class="p">$</span> samplesort run --dry-run        <span class="c"># perceive and plan, no motion</span>
+<span class="p">$</span> samplesort benchmark --trials 20
+<span class="p">$</span> samplesort dashboard            <span class="c"># Streamlit view of the sort log</span></pre>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          samplesort v1.0 &middot; trajectory exported from PyBullet &middot; rendered live in WebGL
+          &middot; MIT licensed
+        </p>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+/* Shared fetch: the replay engine below consumes this same promise, so the
+   trajectory is downloaded once and read by both the 3D view and the tables. */
+window.__run = fetch("data/run.json").then(r => r.json());
+
+(function () {
+  "use strict";
+
+  /* ------------------------------ theme -------------------------------- */
+  var root = document.documentElement;
+  try {
+    var saved = localStorage.getItem("ss-theme");
+    if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
+  } catch (e) { /* storage blocked; system theme still applies */ }
+
+  document.getElementById("themebtn").addEventListener("click", function () {
+    var isDark = root.getAttribute("data-theme") === "dark" ||
+      (!root.hasAttribute("data-theme") &&
+       window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var next = isDark ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("ss-theme", next); } catch (e) { /* ignore */ }
+  });
+
+  /* ------------------------------ router ------------------------------- */
+  var TITLES = {
+    overview:   ["Overview",        "Operations overview"],
+    log:        ["Sort log",        "Sort log"],
+    perception: ["Perception",      "Perception and detection"],
+    workspace:  ["Workspace",       "Workspace geometry"],
+    robust:     ["Robustness",      "Robustness under noise"],
+    status:     ["Status",          "Status and limits"],
+    run:        ["Run",             "Run it yourself"]
+  };
+  var views = Array.prototype.slice.call(document.querySelectorAll(".view"));
+  var navs  = Array.prototype.slice.call(document.querySelectorAll(".navbtn"));
+  var crumb = document.getElementById("crumb");
+  var vtitle = document.getElementById("viewtitle");
+
+  function show(name, push) {
+    if (!TITLES[name]) name = "overview";
+    views.forEach(function (v) { v.hidden = v.dataset.view !== name; });
+    navs.forEach(function (b) {
+      if (b.dataset.view === name) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+    crumb.textContent = TITLES[name][0];
+    vtitle.textContent = TITLES[name][1];
+    if (push && location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    window.scrollTo({ top: 0, behavior: "auto" });
+    if (name === "robust") animateChart();
+  }
+
+  navs.forEach(function (b) {
+    b.addEventListener("click", function () { show(b.dataset.view, true); });
+  });
+  window.addEventListener("hashchange", function () { show(location.hash.slice(1), false); });
+  show(location.hash.slice(1) || "overview", false);
+
+  /* --------------------- kinematics agreement readout ------------------ */
+  window.__fk = function (txt) {
+    var badge = document.getElementById("fkbadge");
+    if (badge) badge.textContent = "kinematics verified · worst error " + txt;
+    var kpi = document.getElementById("kpiFk");
+    if (kpi) kpi.textContent = txt;
+    var rail = document.getElementById("railFk");
+    if (rail) rail.textContent = "FK agrees to " + txt;
+    var inline = document.getElementById("fkinline");
+    if (inline) inline.textContent = txt;
+  };
+
+
+  /* ===================== liveness: the console follows the run ===========
+     The replay engine calls window.__tick on every advancing frame. Everything
+     below is driven from that one signal plus the exported run data, so the
+     rail, the phase pill, the sort log and the map can never disagree with
+     what the 3D view is showing.                                          */
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* --- count-up on the headline figures --- */
+  function countUp(el) {
+    var target = parseFloat(el.dataset.count), dec = Number(el.dataset.dec || 0);
+    var suf = el.dataset.suf || "", pre = el.dataset.pre || "";
+    if (reduceMotion || !isFinite(target)) {
+      el.textContent = pre + target.toFixed(dec) + suf;
+      return;
+    }
+    var t0 = performance.now(), dur = 900;
+    (function step(now) {
+      var k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = pre + (target * e).toFixed(dec) + suf;
+      if (k < 1) requestAnimationFrame(step);
+    })(performance.now());
+  }
+  var counted = false;
+  function runCounters() {
+    if (counted) return;
+    counted = true;
+    document.querySelectorAll("[data-count]").forEach(countUp);
+  }
+  requestAnimationFrame(runCounters);
+
+  /* --- draw the robustness lines in when that view is first opened --- */
+  var chartDone = false;
+  function animateChart() {
+    if (chartDone) return;
+    var paths = document.querySelectorAll("#chart path[stroke]");
+    if (!paths.length) { requestAnimationFrame(animateChart); return; }
+    chartDone = true;
+    if (reduceMotion) return;
+    paths.forEach(function (p, i) {
+      var len = p.getTotalLength();
+      p.style.strokeDasharray = len;
+      p.style.strokeDashoffset = len;
+      p.style.transition = "stroke-dashoffset .95s cubic-bezier(.3,.8,.35,1) " + (i * 0.13) + "s";
+      requestAnimationFrame(function () { p.style.strokeDashoffset = "0"; });
+    });
+    document.querySelectorAll("#chart circle").forEach(function (c, i) {
+      c.style.opacity = "0";
+      c.style.transition = "opacity .28s ease " + (0.5 + i * 0.025) + "s";
+      requestAnimationFrame(function () { c.style.opacity = "1"; });
+    });
+  }
+
+  /* --- keyboard: space plays, digits switch views --- */
+  var ORDER = ["overview", "log", "perception", "workspace", "robust", "status", "run"];
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.code === "Space") {
+      e.preventDefault();
+      var pb = document.getElementById("play");
+      if (pb) pb.click();
+      return;
+    }
+    var n = Number(e.key);
+    if (n >= 1 && n <= ORDER.length) show(ORDER[n - 1], true);
+  });
+
+  /* --- per-frame state shared with the engine --- */
+  var RUN = null, JOBS = [], logRows = [];
+  var mapDot = null, mapHalo = null, mapPath = null, mapPts = [];
+  var playTimer = null;
+
+  function rackLabelOf(id) {
+    if (!RUN) return id;
+    var r = RUN.workspace.racks.filter(function (x) { return x.id === id; })[0];
+    return r ? r.label : id;
+  }
+
+  // Which job owns this frame: the last one to have started at or before it.
+  function jobAt(F) {
+    var found = null;
+    for (var i = 0; i < JOBS.length; i++) if (JOBS[i].start <= F) found = JOBS[i];
+    return found;
+  }
+
+  function phaseFor(F, f) {
+    var j = jobAt(F);
+    if (f.held >= 0) {
+      var t = RUN.tubes.filter(function (x) { return x.id === f.held; })[0];
+      return { text: "carrying " + (t ? t.label : "tube") + " → " +
+                     (j ? rackLabelOf(j.e.rack) : "rack"), cls: "pill warn" };
+    }
+    if (f.g <= 0.5) return { text: "closing on a cap", cls: "pill info" };
+    if (j && F > j.release && j === JOBS[JOBS.length - 1]) {
+      return { text: "run complete \u00b7 8 of 8", cls: "pill ok" };
+    }
+    if (j && F < j.grasp) return { text: "approaching " + j.e.label + " tube", cls: "pill" };
+    return { text: "returning to observe", cls: "pill" };
+  }
+
+  window.__tick = function (F, f, playing) {
+    if (!RUN) return;
+
+    if (playing) {
+      document.body.classList.add("is-playing");
+      clearTimeout(playTimer);
+      playTimer = setTimeout(function () {
+        document.body.classList.remove("is-playing");
+      }, 420);
+    }
+
+    var total = RUN.frames.length - 1;
+    var placed = 0;
+    for (var i = 0; i < JOBS.length; i++) if (JOBS[i].release <= F) placed++;
+
+    document.getElementById("runbar").style.width = (F / total * 100).toFixed(2) + "%";
+    document.getElementById("runframe").textContent =
+      "frame " + String(F).padStart(3, "0");
+    document.getElementById("runplaced").textContent = placed + " placed";
+    document.getElementById("tagLog").textContent = placed + "/" + JOBS.length;
+
+    var ph = phaseFor(F, f);
+    var pill = document.getElementById("phasepill");
+    pill.className = ph.cls;
+    pill.innerHTML = "<i></i>" + ph.text;
+
+    // sort-log rows: done behind the playhead, the next one highlighted
+    for (var k = 0; k < logRows.length; k++) {
+      var st = Number(logRows[k].dataset.f), rl = Number(logRows[k].dataset.rel);
+      logRows[k].classList.toggle("done", rl <= F);
+      logRows[k].classList.toggle("now", st <= F && F < rl);
+    }
+
+    // live tool position on the top-down map
+    var map = document.getElementById("map");
+    if (map && map.childNodes.length) {
+      var x = f.tcp[0] * 1000, y = -f.tcp[1] * 1000;
+      if (!mapDot) {
+        var ns = "http://www.w3.org/2000/svg";
+        mapPath = document.createElementNS(ns, "polyline");
+        mapPath.setAttribute("class", "toolpath");
+        mapHalo = document.createElementNS(ns, "circle");
+        mapHalo.setAttribute("class", "toolhalo");
+        mapHalo.setAttribute("r", 17);
+        mapDot = document.createElementNS(ns, "circle");
+        mapDot.setAttribute("class", "tooldot");
+        mapDot.setAttribute("r", 6);
+        map.appendChild(mapPath); map.appendChild(mapHalo); map.appendChild(mapDot);
+      }
+      mapDot.setAttribute("cx", x); mapDot.setAttribute("cy", y);
+      mapHalo.setAttribute("cx", x); mapHalo.setAttribute("cy", y);
+      mapPts.push(x.toFixed(1) + "," + y.toFixed(1));
+      if (mapPts.length > 150) mapPts.shift();
+      mapPath.setAttribute("points", mapPts.join(" "));
+    }
+  };
+
+  /* ------------------------ data-driven tables ------------------------- */
+  var esc = function (s) { return String(s).replace(/[&<>]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); };
+
+  window.__run.then(function (d) {
+    RUN = d;
+    var fps = d.meta.fps;
+
+    /* events[].f is the frame each pick-and-place JOB STARTS, not where the tube
+       lands. The real grasp and release moments are the frames where `held`
+       changes, so read them straight out of the trajectory. */
+    var grasps = [], releases = [], was = -1;
+    d.frames.forEach(function (fr, i) {
+      if (was < 0 && fr.held >= 0) grasps.push(i);
+      if (was >= 0 && fr.held < 0) releases.push(i);
+      was = fr.held;
+    });
+    JOBS = d.events.map(function (e, i) {
+      return { e: e, start: e.f,
+               grasp: grasps[i] === undefined ? e.f : grasps[i],
+               release: releases[i] === undefined ? d.frames.length - 1 : releases[i] };
+    });
+    var colorOf = {}, rackOf = {};
+    d.classes.forEach(function (c) { colorOf[c.label] = c.color; rackOf[c.label] = c.rack; });
+    var rackName = {};
+    d.workspace.racks.forEach(function (r) { rackName[r.id] = r.label; });
+
+    document.getElementById("railFrames").textContent = d.frames.length + " f";
+
+    /* sort log ------------------------------------------------------- */
+    document.getElementById("logtable").innerHTML = JOBS.map(function (j, i) {
+      return "<tr class='logrow' data-f='" + j.start + "' data-rel='" + j.release +
+        "' tabindex='0' title='Jump the replay to this pick'>" +
+        "<td class='m'>" + (i + 1) + "</td>" +
+        "<td class='strong'><span class='swatch'><i style='background:" +
+          colorOf[j.e.label] + "'></i>" + esc(j.e.label) + "</span></td>" +
+        "<td class='strong'>" + esc(rackName[j.e.rack] || j.e.rack) + "</td>" +
+        "<td class='m'>" + j.e.slot + "</td>" +
+        "<td class='m'>" + (j.grasp / fps).toFixed(2) + " s</td>" +
+        "<td class='m'>" + (j.release / fps).toFixed(2) + " s</td>" +
+        "<td class='m'>" + ((j.release - j.grasp) / fps).toFixed(2) + " s</td>" +
+        "<td><span class='pill ok'><i></i>placed</span></td>" +
+        "</tr>";
+    }).join("");
+
+    /* detections ----------------------------------------------------- */
+    document.getElementById("dettable").innerHTML = d.detections.map(function (x, i) {
+      return "<tr class='detrow' data-u='" + x.u + "' data-v='" + x.v + "' " +
+        "data-col='" + colorOf[x.label] + "' tabindex='0'>" +
+        "<td class='m'>" + (i + 1) + "</td>" +
+        "<td class='strong'><span class='swatch'><i style='background:" +
+          colorOf[x.label] + "'></i>" + esc(x.label) + "</span></td>" +
+        "<td class='m'>" + x.u.toFixed(1) + ", " + x.v.toFixed(1) + "</td>" +
+        "<td class='m'>" + x.area.toFixed(0) + " px</td>" +
+        "<td class='m'>" + x.conf.toFixed(3) + "</td>" +
+        "<td class='m'>" + (x.xy[0] * 1000).toFixed(1) + "</td>" +
+        "<td class='m'>" + (x.xy[1] * 1000).toFixed(1) + "</td>" +
+        "</tr>";
+    }).join("");
+
+    /* rack occupancy -------------------------------------------------- */
+    var filled = {};
+    d.events.forEach(function (e) { filled[e.rack] = (filled[e.rack] || 0) + 1; });
+    var classesFor = {};
+    d.classes.forEach(function (c) {
+      (classesFor[c.rack] = classesFor[c.rack] || []).push(c);
+    });
+    document.getElementById("rackgrid").innerHTML = d.workspace.racks.map(function (r) {
+      var n = filled[r.id] || 0, cap = r.slots.length;
+      var cls = classesFor[r.id] || [];
+      var dots = cls.map(function (c) {
+        return "<i style='display:inline-block;width:9px;height:9px;border-radius:50%;background:" +
+               c.color + "'></i>";
+      }).join(" ");
+      var slots = "";
+      for (var i = 0; i < cap; i++) {
+        var fillCol = cls.length ? cls[0].color : "var(--good)";
+        slots += "<i" + (i < n ? " style='background:" + fillCol + ";border-color:" +
+                 fillCol + "'" : "") + "></i>";
+      }
+      return "<div class='rackcard'>" +
+        "<div class='rname'>" + dots + " " + esc(r.label) + "</div>" +
+        "<div class='rfill'>" + n + " / " + cap + "</div>" +
+        "<div class='rsub'>" + cls.map(function (c) { return c.label; }).join(" + ") + "</div>" +
+        "<div class='slots'>" + slots + "</div>" +
+        "</div>";
+    }).join("");
+
+    /* rows wired to the replay ------------------------------------------ */
+    logRows = Array.prototype.slice.call(document.querySelectorAll(".logrow"));
+    logRows.forEach(function (row) {
+      var jump = function () {
+        var seek = document.getElementById("seek");
+        seek.value = row.dataset.f;
+        seek.dispatchEvent(new Event("input", { bubbles: true }));
+        show("overview", true);
+      };
+      row.addEventListener("click", jump);
+      row.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.code === "Space") { ev.preventDefault(); jump(); }
+      });
+    });
+
+    var mark = document.getElementById("blobmark");
+    document.querySelectorAll(".detrow").forEach(function (row) {
+      var on = function () {
+        mark.style.left = (Number(row.dataset.u) / 640 * 100) + "%";
+        mark.style.top = (Number(row.dataset.v) / 480 * 100) + "%";
+        mark.style.borderColor = row.dataset.col;
+        mark.classList.add("on");
+      };
+      var off = function () { mark.classList.remove("on"); };
+      row.addEventListener("mouseenter", on);
+      row.addEventListener("focus", on);
+      row.addEventListener("mouseleave", off);
+      row.addEventListener("blur", off);
+    });
+  }).catch(function () { /* the replay panel already reports a load failure */ });
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ===================================================================== */
+  /*  mat4 — column-major, the same convention WebGL wants                  */
+  /* ===================================================================== */
+  // Float64 throughout: float32 matrices accumulate ~57 nm of drift down the
+  // joint chain, which is invisible but would weaken the verification below.
+  const M4 = {
+    id: () => new Float64Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+    mul(a, b, o) {
+      o = o || new Float64Array(16);
+      for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+        o[c * 4 + r] = s;
+      }
+      return o;
+    },
+    trans: (x, y, z) => new Float64Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]),
+    scale: (x, y, z) => new Float64Array([x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1]),
+    axis(ax, ay, az, t) {
+      const n = Math.hypot(ax, ay, az) || 1; ax /= n; ay /= n; az /= n;
+      const c = Math.cos(t), s = Math.sin(t), k = 1 - c;
+      return new Float64Array([
+        c + ax*ax*k,     ay*ax*k + az*s, az*ax*k - ay*s, 0,
+        ax*ay*k - az*s,  c + ay*ay*k,    az*ay*k + ax*s, 0,
+        ax*az*k + ay*s,  ay*az*k - ax*s, c + az*az*k,    0,
+        0, 0, 0, 1,
+      ]);
+    },
+    quat(x, y, z, w) {
+      const x2=x+x, y2=y+y, z2=z+z;
+      const xx=x*x2, xy=x*y2, xz=x*z2, yy=y*y2, yz=y*z2, zz=z*z2;
+      const wx=w*x2, wy=w*y2, wz=w*z2;
+      return new Float64Array([
+        1-(yy+zz), xy+wz,     xz-wy,     0,
+        xy-wz,     1-(xx+zz), yz+wx,     0,
+        xz+wy,     yz-wx,     1-(xx+yy), 0,
+        0,0,0,1,
+      ]);
+    },
+    persp(fovy, aspect, near, far) {
+      const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+      return new Float64Array([
+        f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0,
+      ]);
+    },
+    look(eye, ctr, up) {
+      let zx=eye[0]-ctr[0], zy=eye[1]-ctr[1], zz=eye[2]-ctr[2];
+      let l = Math.hypot(zx,zy,zz) || 1; zx/=l; zy/=l; zz/=l;
+      let xx = up[1]*zz - up[2]*zy, xy = up[2]*zx - up[0]*zz, xz = up[0]*zy - up[1]*zx;
+      l = Math.hypot(xx,xy,xz) || 1; xx/=l; xy/=l; xz/=l;
+      const yx = zy*xz - zz*xy, yy = zz*xx - zx*xz, yz = zx*xy - zy*xx;
+      return new Float64Array([
+        xx,yx,zx,0, xy,yy,zy,0, xz,yz,zz,0,
+        -(xx*eye[0]+xy*eye[1]+xz*eye[2]),
+        -(yx*eye[0]+yy*eye[1]+yz*eye[2]),
+        -(zx*eye[0]+zy*eye[1]+zz*eye[2]), 1,
+      ]);
+    },
+    // normal matrix: transpose(inverse(upper-left 3x3)), packed as mat3
+    normal(m) {
+      const a=m[0],b=m[1],c=m[2], d=m[4],e=m[5],f=m[6], g=m[8],h=m[9],i=m[10];
+      const A=e*i-f*h, B=f*g-d*i, C=d*h-e*g;
+      let det = a*A + b*B + c*C;
+      if (!det) det = 1e-8;
+      const id = 1 / det;
+      return new Float64Array([
+        A*id, B*id, C*id,
+        (c*h-b*i)*id, (a*i-c*g)*id, (b*g-a*h)*id,
+        (b*f-c*e)*id, (c*d-a*f)*id, (a*e-b*d)*id,
+      ]);
+    },
+  };
+
+  /* ===================================================================== */
+  /*  geometry — a unit box and a unit cylinder, scaled per instance        */
+  /* ===================================================================== */
+  function unitBox() {
+    const p = [], n = [], idx = [];
+    const faces = [
+      [[ .5,-.5,-.5],[ .5, .5,-.5],[ .5, .5, .5],[ .5,-.5, .5],[ 1, 0, 0]],
+      [[-.5,-.5,-.5],[-.5,-.5, .5],[-.5, .5, .5],[-.5, .5,-.5],[-1, 0, 0]],
+      [[-.5, .5,-.5],[-.5, .5, .5],[ .5, .5, .5],[ .5, .5,-.5],[ 0, 1, 0]],
+      [[-.5,-.5,-.5],[ .5,-.5,-.5],[ .5,-.5, .5],[-.5,-.5, .5],[ 0,-1, 0]],
+      [[-.5,-.5, .5],[ .5,-.5, .5],[ .5, .5, .5],[-.5, .5, .5],[ 0, 0, 1]],
+      [[-.5,-.5,-.5],[-.5, .5,-.5],[ .5, .5,-.5],[ .5,-.5,-.5],[ 0, 0,-1]],
+    ];
+    faces.forEach(f => {
+      const base = p.length / 3;
+      for (let k = 0; k < 4; k++) { p.push(...f[k]); n.push(...f[4]); }
+      idx.push(base, base+1, base+2, base, base+2, base+3);
+    });
+    return { p, n, idx };
+  }
+  function unitCyl(seg) {
+    const p = [], n = [], idx = [];
+    for (let i = 0; i < seg; i++) {           // smooth side
+      const a = (i / seg) * Math.PI * 2, b = ((i + 1) / seg) * Math.PI * 2;
+      const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+      const base = p.length / 3;
+      p.push(ca,sa,-.5, cb,sb,-.5, cb,sb,.5, ca,sa,.5);
+      n.push(ca,sa,0, cb,sb,0, cb,sb,0, ca,sa,0);
+      idx.push(base, base+1, base+2, base, base+2, base+3);
+    }
+    [[.5, 1], [-.5, -1]].forEach(([z, dir]) => {   // flat caps
+      const c = p.length / 3;
+      p.push(0, 0, z); n.push(0, 0, dir);
+      for (let i = 0; i <= seg; i++) {
+        const a = (i / seg) * Math.PI * 2;
+        p.push(Math.cos(a), Math.sin(a), z); n.push(0, 0, dir);
+      }
+      for (let i = 0; i < seg; i++) {
+        if (dir > 0) idx.push(c, c + 1 + i, c + 2 + i);
+        else idx.push(c, c + 2 + i, c + 1 + i);
+      }
+    });
+    return { p, n, idx };
+  }
+
+  /* ===================================================================== */
+  /*  renderer                                                              */
+  /* ===================================================================== */
+  const VS = `
+    attribute vec3 aPos; attribute vec3 aNrm;
+    uniform mat4 uMVP, uModel; uniform mat3 uNrm;
+    varying vec3 vN; varying vec3 vW;
+    void main(){
+      vec4 w = uModel * vec4(aPos, 1.0);
+      vW = w.xyz; vN = uNrm * aNrm;
+      gl_Position = uMVP * vec4(aPos, 1.0);
+    }`;
+  const FS = `
+    precision highp float;
+    varying vec3 vN; varying vec3 vW;
+    uniform vec3 uColor, uLight, uEye, uSky, uGround;
+    uniform float uSpec, uShin, uFlat, uAlpha;
+    void main(){
+      if (uFlat > 0.5) { gl_FragColor = vec4(uColor, uAlpha); return; }
+      vec3 N = normalize(vN), L = normalize(uLight);
+      vec3 V = normalize(uEye - vW), H = normalize(L + V);
+      float d = max(dot(N, L), 0.0);
+      float hemi = 0.5 + 0.5 * N.z;
+      vec3 amb = mix(uGround, uSky, hemi);
+      float s = pow(max(dot(N, H), 0.0), uShin) * uSpec;
+      float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.10;
+      vec3 c = uColor * (amb + d * 0.78) + vec3(s) + vec3(rim);
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), uAlpha);
+    }`;
+
+  const canvas = document.getElementById("gl");
+  const gl = canvas.getContext("webgl", { antialias: true, alpha: false, depth: true })
+          || canvas.getContext("experimental-webgl", { antialias: true });
+
+  let prog, loc, meshes = {};
+  function compile(src, type) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function makeMesh(g) {
+    const vb = gl.createBuffer(), nb = gl.createBuffer(), ib = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(g.p), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, nb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(g.n), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(g.idx), gl.STATIC_DRAW);
+    return { vb, nb, ib, count: g.idx.length };
+  }
+  function initGL() {
+    prog = gl.createProgram();
+    gl.attachShader(prog, compile(VS, gl.VERTEX_SHADER));
+    gl.attachShader(prog, compile(FS, gl.FRAGMENT_SHADER));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    gl.useProgram(prog);
+    loc = {
+      aPos: gl.getAttribLocation(prog, "aPos"), aNrm: gl.getAttribLocation(prog, "aNrm"),
+      uMVP: gl.getUniformLocation(prog, "uMVP"), uModel: gl.getUniformLocation(prog, "uModel"),
+      uNrm: gl.getUniformLocation(prog, "uNrm"), uColor: gl.getUniformLocation(prog, "uColor"),
+      uLight: gl.getUniformLocation(prog, "uLight"), uEye: gl.getUniformLocation(prog, "uEye"),
+      uSky: gl.getUniformLocation(prog, "uSky"), uGround: gl.getUniformLocation(prog, "uGround"),
+      uSpec: gl.getUniformLocation(prog, "uSpec"), uShin: gl.getUniformLocation(prog, "uShin"),
+      uFlat: gl.getUniformLocation(prog, "uFlat"), uAlpha: gl.getUniformLocation(prog, "uAlpha"),
+    };
+    meshes.box = makeMesh(unitBox());
+    meshes.cyl = makeMesh(unitCyl(40));
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+  }
+
+  const _m1 = new Float32Array(16), _m2 = new Float32Array(16), _n1 = new Float32Array(9);
+  const f32 = (m, out) => { out.set(m); return out; };
+
+  const LIGHT = [-0.42, 0.62, 1.0];
+  let VP = M4.id(), EYE = [0, 0, 1];
+
+  function draw(mesh, model, color, opts) {
+    opts = opts || {};
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vb);
+    gl.enableVertexAttribArray(loc.aPos);
+    gl.vertexAttribPointer(loc.aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.nb);
+    gl.enableVertexAttribArray(loc.aNrm);
+    gl.vertexAttribPointer(loc.aNrm, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
+    gl.uniformMatrix4fv(loc.uMVP, false, f32(M4.mul(VP, model), _m1));
+    gl.uniformMatrix4fv(loc.uModel, false, f32(model, _m2));
+    gl.uniformMatrix3fv(loc.uNrm, false, f32(M4.normal(model), _n1));
+    gl.uniform3fv(loc.uColor, color);
+    gl.uniform1f(loc.uSpec, opts.spec === undefined ? 0.16 : opts.spec);
+    gl.uniform1f(loc.uShin, opts.shin === undefined ? 28 : opts.shin);
+    gl.uniform1f(loc.uFlat, opts.flat ? 1 : 0);
+    gl.uniform1f(loc.uAlpha, opts.alpha === undefined ? 1 : opts.alpha);
+    gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
+  }
+
+  const hex2rgb = h => {
+    h = h.replace("#", "");
+    return [parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255];
+  };
+
+  /* ===================================================================== */
+  /*  scene                                                                 */
+  /* ===================================================================== */
+  let D = null, F = 0, playing = false, speed = 1, acc = 0, last = 0;
+  let worstFK = 0;
+  const cam = { az: 0.72, el: 0.46, dist: 0.80, target: [0.19, 0, 0.085], mode: "orbit" };
+  const show = { trail: true, zone: true, reach: false, shadow: true };
+  let trail = [];
+
+  const COL = {
+    floor: [0.09, 0.10, 0.13], table: [0.60, 0.61, 0.63],
+    plate: [0.33, 0.35, 0.39], slot: [0.17, 0.18, 0.21],
+    base: [0.20, 0.22, 0.26], yaw: [0.28, 0.30, 0.35],
+    upper: [0.80, 0.53, 0.20], fore: [0.74, 0.58, 0.30], wrist: [0.50, 0.53, 0.58],
+    tool: [0.16, 0.17, 0.20], finger: [0.11, 0.12, 0.14],
+    glass: [0.80, 0.83, 0.88],
+  };
+
+  function jointChain(q) {
+    const [l1, l2, l3] = D.arm.links, h0 = D.arm.base_height;
+    const out = {};
+    let m = M4.id();
+    out.base = m;
+    m = M4.mul(m, M4.axis(0, 0, 1, q[0]));           out.yaw = m;
+    m = M4.mul(m, M4.trans(0, 0, h0));
+    m = M4.mul(m, M4.axis(0, -1, 0, q[1]));          out.upper = m;
+    m = M4.mul(m, M4.trans(l1, 0, 0));
+    m = M4.mul(m, M4.axis(0, -1, 0, q[2]));          out.fore = m;
+    m = M4.mul(m, M4.trans(l2, 0, 0));
+    m = M4.mul(m, M4.axis(0, -1, 0, q[3]));          out.wrist = m;
+    m = M4.mul(m, M4.trans(l3, 0, 0));
+    m = M4.mul(m, M4.axis(1, 0, 0, q[4]));           out.tool = m;
+    return out;
+  }
+
+  // Flatten onto the table plane along the light, for projected shadows.
+  function shadowMat(z) {
+    const L = LIGHT, m = M4.id();
+    m[8]  = -L[0] / L[2];
+    m[9]  = -L[1] / L[2];
+    m[10] = 0;
+    m[14] = z;
+    return m;
+  }
+
+  function parts() {
+    const [l1, l2, l3] = D.arm.links, h0 = D.arm.base_height;
+    const g = D.arm.gripper, f = D.frames[F];
+    const C = jointChain(f.q);
+    const half = g.open / 2, span = (g.open - g.closed) / 2;
+    const travel = (1 - f.g) * span, fy = half - travel;
+    const list = [];
+    const push = (mesh, parent, local, col, o) =>
+      list.push({ mesh, m: M4.mul(parent, local), c: col, o: o || {} });
+
+    push(meshes.box, C.base, M4.mul(M4.trans(0,0,0.0075), M4.scale(0.09,0.09,0.015)), COL.base);
+    push(meshes.box, C.yaw,  M4.mul(M4.trans(0,0,h0/2),   M4.scale(0.05,0.05,h0)),    COL.yaw);
+    push(meshes.box, C.upper,M4.mul(M4.trans(l1/2,0,0),   M4.scale(l1,0.032,0.032)),  COL.upper, {spec:.22});
+    push(meshes.box, C.fore, M4.mul(M4.trans(l2/2,0,0),   M4.scale(l2,0.032,0.032)),  COL.fore,  {spec:.22});
+    push(meshes.box, C.wrist,M4.mul(M4.trans(l3/2,0,0),   M4.scale(l3,0.032,0.032)),  COL.wrist);
+    push(meshes.box, C.tool, M4.scale(0.012,0.030,0.030), COL.tool);
+    push(meshes.box, C.tool, M4.mul(M4.trans(-g.finger/2, fy,0), M4.scale(g.finger,0.008,0.020)), COL.finger);
+    push(meshes.box, C.tool, M4.mul(M4.trans(-g.finger/2,-fy,0), M4.scale(g.finger,0.008,0.020)), COL.finger);
+
+    const t = D.workspace.tube;
+    f.t.forEach((tp, i) => {
+      const info = D.tubes[i];
+      if (!info) return;
+      const R = M4.quat(tp[3], tp[4], tp[5], tp[6]);
+      // PyBullet reports the centre-of-mass frame; the geometry sits 0.35*bh above it.
+      const off = M4.mul(R, M4.trans(0, 0, 0.35 * t.bh));
+      const link = M4.mul(M4.trans(tp[0], tp[1], tp[2]), off);
+      push(meshes.cyl, link, M4.scale(t.br, t.br, t.bh), COL.glass, { spec: .34, shin: 46 });
+      push(meshes.cyl, link, M4.mul(M4.trans(0, 0, (t.bh + t.ch) / 2), M4.scale(t.cr, t.cr, t.ch)),
+           hex2rgb((D.classes.find(c => c.label === info.label) || { color: "#888888" }).color),
+           { spec: .40, shin: 54 });
+    });
+    return list;
+  }
+
+  function staticParts() {
+    const w = D.workspace, list = [];
+    const halfX = w.table[0] / 2, halfY = w.table[1] / 2, th = 0.02;
+    list.push({ mesh: meshes.box, c: COL.table,
+      m: M4.mul(M4.trans(halfX - 0.1, 0, w.table_h - th / 2), M4.scale(w.table[0], w.table[1], th)) });
+    w.racks.forEach(r => {
+      const xs = r.slots.map(s => s[0]), ys = r.slots.map(s => s[1]), pad = 0.03;
+      const hx = (Math.max(...xs) - Math.min(...xs)) / 2 + pad;
+      const hy = (Math.max(...ys) - Math.min(...ys)) / 2 + pad;
+      const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+      list.push({ mesh: meshes.box, c: COL.plate,
+        m: M4.mul(M4.trans(cx, cy, w.table_h + w.plate_h / 2), M4.scale(hx * 2, hy * 2, w.plate_h)) });
+      r.slots.forEach(s => list.push({ mesh: meshes.cyl, c: COL.slot,
+        m: M4.mul(M4.trans(s[0], s[1], w.table_h + w.plate_h + 0.001),
+                  M4.scale(w.tube.cr * 1.6, w.tube.cr * 1.6, 0.002)) }));
+    });
+    return list;
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+
+  function camEye() {
+    if (cam.mode === "top") return [0.21, 0.0001, 0.70];
+    if (cam.mode === "front") return [cam.target[0] + 0.9, 0, 0.30];
+    return [
+      cam.target[0] + cam.dist * Math.cos(cam.el) * Math.cos(cam.az),
+      cam.target[1] + cam.dist * Math.cos(cam.el) * Math.sin(cam.az),
+      cam.target[2] + cam.dist * Math.sin(cam.el),
+    ];
+  }
+
+  let statics = null;
+  function render() {
+    if (!D) return;
+    resize();
+    const dark = getComputedStyle(document.documentElement)
+      .getPropertyValue("--inset").trim() || "#0a0c11";
+    const bg = hex2rgb(dark.length === 7 ? dark : "#0a0c11");
+    gl.clearColor(bg[0], bg[1], bg[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const eye = camEye();
+    EYE = eye;
+    const target = cam.mode === "top" ? [0.21, 0, 0] : cam.target;
+    const proj = M4.persp(cam.mode === "top" ? 0.78 : 0.72,
+                          canvas.width / canvas.height, 0.02, 12);
+    VP = M4.mul(proj, M4.look(eye, target, [0, 0, 1]));
+
+    gl.uniform3fv(loc.uLight, LIGHT);
+    gl.uniform3fv(loc.uEye, eye);
+    gl.uniform3fv(loc.uSky, [0.36, 0.38, 0.44]);
+    gl.uniform3fv(loc.uGround, [0.12, 0.12, 0.15]);
+
+    // big backdrop floor
+    draw(meshes.box, M4.mul(M4.trans(0.2, 0, -0.06), M4.scale(14, 14, 0.02)), COL.floor, { spec: 0 });
+
+    if (!statics) statics = staticParts();
+    statics.forEach(s => draw(s.mesh, s.m, s.c, { spec: 0.08 }));
+
+    const dyn = parts();
+
+    if (show.shadow) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.disable(gl.CULL_FACE);
+      const S = shadowMat(D.workspace.table_h + 0.0007);
+      dyn.forEach(p => draw(p.mesh, M4.mul(S, p.m), [0.02, 0.03, 0.05],
+                            { flat: true, alpha: 0.26 }));
+      gl.enable(gl.CULL_FACE);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    dyn.forEach(p => draw(p.mesh, p.m, p.c, p.o));
+
+    // pickup zone, drawn as a thin slab just above the table
+    if (show.zone) {
+      const z = D.workspace.zone;
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      draw(meshes.box,
+        M4.mul(M4.trans((z[0]+z[1])/2, (z[2]+z[3])/2, D.workspace.table_h + 0.0004),
+               M4.scale(z[1]-z[0], z[3]-z[2], 0.0006)),
+        [0.29, 0.45, 0.85], { flat: true, alpha: 0.16 });
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    if (show.reach) {
+      const R = D.arm.links[0] + D.arm.links[1];
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      for (let i = 0; i < 72; i++) {
+        const a = (i / 72) * Math.PI * 2;
+        draw(meshes.box,
+          M4.mul(M4.trans(R * Math.cos(a), R * Math.sin(a), D.workspace.table_h + 0.0008),
+                 M4.scale(0.012, 0.012, 0.0008)),
+          [0.55, 0.60, 0.72], { flat: true, alpha: 0.5 });
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    if (show.trail && trail.length > 1) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      const n = trail.length, start = Math.max(0, n - 200);
+      for (let i = start; i < n; i += 2) {
+        const p = trail[i], a = 0.10 + 0.55 * ((i - start) / 200);
+        draw(meshes.box, M4.mul(M4.trans(p[0], p[1], p[2]), M4.scale(0.004, 0.004, 0.004)),
+             [0.48, 0.66, 1.0], { flat: true, alpha: a });
+      }
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  /* ----------------------------- frame state ---------------------------- */
+  const hud = document.getElementById("hud");
+  const timecode = document.getElementById("timecode");
+  const seekEl = document.getElementById("seek");
+
+  function setFrame(i, rebuildTrail) {
+    F = Math.max(0, Math.min(D.frames.length - 1, i));
+    seekEl.value = F;
+    const f = D.frames[F];
+
+    // live self-check: the viewer's own tool position vs Python's analytic FK
+    const C = jointChain(f.q);
+    const p = [C.tool[12], C.tool[13], C.tool[14]];
+    const err = Math.hypot(p[0]-f.tcp[0], p[1]-f.tcp[1], p[2]-f.tcp[2]);
+    if (err > worstFK) {
+      worstFK = err;
+      const pm = worstFK * 1e12;
+      const txt = pm < 10 ? pm.toFixed(3) + " pm"
+                 : pm < 1000 ? pm.toFixed(1) + " pm" : (worstFK * 1e9).toFixed(2) + " nm";
+      window.__fk(txt);
+    }
+
+    if (rebuildTrail) {
+      trail = [];
+      for (let k = 0; k <= F; k++) {
+        const c = jointChain(D.frames[k].q);
+        trail.push([c.tool[12], c.tool[13], c.tool[14]]);
+      }
+    } else {
+      trail.push(p);
+      if (trail.length > 400) trail.shift();
+    }
+
+    const t = F / D.meta.fps;
+    timecode.textContent = t.toFixed(2) + " s · " +
+      String(F + 1).padStart(3, "0") + "/" + D.frames.length;
+    const held = f.held >= 0 ? (D.tubes.find(x => x.id === f.held) || {}).label : null;
+    hud.innerHTML =
+      "<b>joints</b> " + f.q.map(v => (v * 180 / Math.PI).toFixed(1).padStart(6)).join(" ") + "°<br>" +
+      "<b>tool</b>&nbsp;&nbsp; x " + f.tcp[0].toFixed(3) + "  y " + f.tcp[1].toFixed(3) +
+      "  z " + f.tcp[2].toFixed(3) + " m<br>" +
+      "<b>grip</b>&nbsp;&nbsp; " + (f.g > 0.5 ? "open" : "closed") +
+      (held ? "  <span class='ok'>holding " + held + "</span>" : "") + "<br>" +
+      "<b>check</b>&nbsp; FK Δ " + (err * 1e12).toFixed(3) + " pm";
+
+    document.querySelectorAll(".tick").forEach(el =>
+      el.classList.toggle("on", Number(el.dataset.f) <= F));
+
+    if (window.__tick) window.__tick(F, f, playing);
+  }
+
+  function loop(ts) {
+    if (playing && D) {
+      if (!last) last = ts;
+      acc += (ts - last) * 0.001 * speed;
+      last = ts;
+      const step = 1 / D.meta.fps;
+      while (acc >= step) {
+        acc -= step;
+        setFrame((F + 1) % D.frames.length, F + 1 >= D.frames.length);
+      }
+    } else { last = ts; }
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  /* ------------------------------ controls ------------------------------ */
+  let drag = null;
+  canvas.addEventListener("pointerdown", e => {
+    if (cam.mode !== "orbit") return;
+    drag = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (!drag) return;
+    cam.az -= (e.clientX - drag.x) * 0.008;
+    cam.el = Math.max(0.06, Math.min(1.45, cam.el + (e.clientY - drag.y) * 0.006));
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(ev =>
+    canvas.addEventListener(ev, () => { drag = null; }));
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    cam.dist = Math.max(0.32, Math.min(2.2, cam.dist * (1 + Math.sign(e.deltaY) * 0.1)));
+  }, { passive: false });
+
+  document.querySelectorAll(".camzone button").forEach(b =>
+    b.addEventListener("click", () => {
+      cam.mode = b.dataset.cam;
+      document.querySelectorAll(".camzone button").forEach(x =>
+        x.setAttribute("aria-pressed", String(x === b)));
+    }));
+
+  const playBtn = document.getElementById("play");
+  playBtn.addEventListener("click", () => {
+    playing = !playing; last = 0;
+    playBtn.textContent = playing ? "❚❚ Pause" : "▶ Play";
+  });
+  seekEl.addEventListener("input", () => {
+    playing = false; playBtn.textContent = "▶ Play";
+    setFrame(Number(seekEl.value), true);
+  });
+  document.querySelectorAll(".speeds button").forEach(b =>
+    b.addEventListener("click", () => {
+      speed = Number(b.dataset.sp);
+      document.querySelectorAll(".speeds button").forEach(x =>
+        x.setAttribute("aria-pressed", String(x === b)));
+    }));
+  [["tTrail","trail"],["tZone","zone"],["tReach","reach"],["tShadow","shadow"]].forEach(([id,k]) =>
+    document.getElementById(id).addEventListener("change", e => { show[k] = e.target.checked; }));
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") { playing = false; playBtn.textContent = "▶ Play"; setFrame(F + 1, true); }
+    if (e.key === "ArrowLeft")  { playing = false; playBtn.textContent = "▶ Play"; setFrame(F - 1, true); }
+  });
+
+  /* ------------------------------- boot --------------------------------- */
+  try { initGL(); } catch (err) {
+    document.getElementById("loading").textContent = "WebGL unavailable: " + err.message;
+  }
+
+  window.__run.then(data => {
+    D = data;
+    seekEl.max = D.frames.length - 1;
+    document.getElementById("loading").style.display = "none";
+
+    const CAP = {}; D.classes.forEach(c => { CAP[c.label] = c.color; });
+    document.getElementById("ticks").innerHTML = D.events.map((e, i) => {
+      const pct = (e.f / (D.frames.length - 1)) * 100;
+      return "<span class='tick' data-f='" + e.f + "' style='left:" + pct + "%' title='" +
+             e.label + " → " + e.rack + "'><i style='background:" + CAP[e.label] + "'></i>" +
+             (i + 1) + "</span>";
+    }).join("");
+    document.querySelectorAll(".tick").forEach(el =>
+      el.addEventListener("click", () => {
+        playing = false; playBtn.textContent = "▶ Play";
+        setFrame(Number(el.dataset.f), true);
+      }));
+
+    // Walk every frame once so the verified worst-case error is a real maximum.
+    let w = 0;
+    D.frames.forEach(f => {
+      const c = jointChain(f.q);
+      w = Math.max(w, Math.hypot(c.tool[12]-f.tcp[0], c.tool[13]-f.tcp[1], c.tool[14]-f.tcp[2]));
+    });
+    worstFK = w;
+    const pmW = w * 1e12;
+    const txt = pmW < 10 ? pmW.toFixed(3) + " pm"
+              : pmW < 1000 ? pmW.toFixed(1) + " pm" : (w * 1e9).toFixed(2) + " nm";
+    window.__fk(txt);
+
+    buildMap();
+    setFrame(0, true);
+    playing = true; playBtn.textContent = "❚❚ Pause";
+    requestAnimationFrame(loop);
+  }).catch(err => {
+    document.getElementById("loading").textContent = "could not load the trajectory: " + err.message;
+  });
+
+  /* ===================================================================== */
+  /*  stage stepper                                                         */
+  /* ===================================================================== */
+  const STAGES = [
+    { h: "Find every tube and say where it is, in millimetres",
+      b: "An overhead camera frame goes through HSV colour masking and contour analysis to find cap-shaped blobs. Each blob's pixel centroid is mapped onto the bench through a calibration homography. Caps sit 52&nbsp;mm above the plane that homography is fitted on, so a parallax correction pulls each reading back toward the camera's nadir — without it, positions are out by 4–10&nbsp;mm.",
+      f: "perception/calibration.py · detector.py · classifier.py" },
+    { h: "Match each tube to a free slot, and order the work",
+      b: "Cap colour maps to a class, and each class maps to a destination rack. The planner asks the rack tracker for the next free slot, skipping any tube whose rack is full rather than failing the run. Jobs are ordered nearest-first: shorter reaches are faster and more accurate, and clearing near tubes first means fewer chances to clip one while reaching past it.",
+      f: "planning/rack_state.py · task_planner.py" },
+    { h: "Six waypoints, solved exactly, verified at each step",
+      b: "Approach, grasp, lift, traverse, place, retreat. Each waypoint is a Cartesian pose solved to joint angles by closed-form inverse kinematics — no numerical solver, no convergence failures, and both elbow configurations are computed so the one respecting the joint limits wins. A missed grasp is retried once, then the tube is set aside and logged.",
+      f: "planning/kinematics.py · control/scripted.py" },
+    { h: "One row per attempt, successes and failures alike",
+      b: "Every attempt writes to SQLite: timestamp, class, pickup coordinates, destination rack and slot, which controller ran it, how long it took, and the failure reason when it didn't work. The table is append-only, because that is the right shape for a chain-of-custody record. A Streamlit dashboard reads the same file.",
+      f: "logging_db/sort_log.py · dashboard/app.py" },
+  ];
+  const sbody = document.getElementById("stagebody");
+  const stabs = Array.from(document.querySelectorAll(".stage"));
+  function showStage(i) {
+    sbody.innerHTML = "<h3>" + STAGES[i].h + "</h3><p class='muted'>" + STAGES[i].b +
+                      "</p><div class='files'>" + STAGES[i].f + "</div>";
+    stabs.forEach((t, j) => t.setAttribute("aria-selected", String(j === i)));
+  }
+  stabs.forEach((t, i) => t.addEventListener("click", () => showStage(i)));
+  showStage(0);
+
+  /* ===================================================================== */
+  /*  detector lab                                                          */
+  /* ===================================================================== */
+  const CLASSES = [
+    { label: "red",    hex: "#d64545", rgb: [214,69,69],  hue: [[0,8],[172,179]] },
+    { label: "blue",   hex: "#4472d6", rgb: [68,114,214], hue: [[100,130]] },
+    { label: "green",  hex: "#4aa35a", rgb: [74,163,90],  hue: [[45,80]] },
+    { label: "yellow", hex: "#d6c045", rgb: [214,192,69], hue: [[22,34]] },
+  ];
+  const EXPECTED = 8;
+  const camc = document.getElementById("cam");
+  const cctx = camc.getContext("2d", { willReadFrequently: true });
+  const verdict = document.getElementById("verdict");
+  const activeCls = { red: true, blue: true, green: true, yellow: true };
+  let HH = null, SS = null, VV = null, CW = 0, CH = 0, baseImg = null;
+
+  document.getElementById("chips").innerHTML = CLASSES.map(c =>
+    "<button class='chip' aria-pressed='true' data-c='" + c.label + "'><i style='background:" +
+    c.hex + "'></i>" + c.label + "</button>").join("");
+  document.getElementById("chips").addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    activeCls[b.dataset.c] = !activeCls[b.dataset.c];
+    b.setAttribute("aria-pressed", String(activeCls[b.dataset.c]));
+    runDet();
+  });
+
+  const SL = { sat: 110, val: 70, hue: 0, area: 45 };
+  Object.keys(SL).forEach(k => {
+    const el = document.getElementById(k);
+    el.addEventListener("input", () => {
+      SL[k] = Number(el.value);
+      document.getElementById(k + "v").textContent = el.value;
+      runDet();
+    });
+  });
+  document.querySelectorAll(".presets button").forEach(b =>
+    b.addEventListener("click", () => {
+      const P = { ship: [110,70,0,45], loose: [26,24,18,12], strict: [205,180,-10,240] };
+      const v = P[b.dataset.preset];
+      ["sat","val","hue","area"].forEach((k, i) => {
+        SL[k] = v[i];
+        document.getElementById(k).value = v[i];
+        document.getElementById(k + "v").textContent = v[i];
+      });
+      runDet();
+    }));
+
+  function toHSV(d) {
+    const n = d.length / 4;
+    HH = new Float32Array(n); SS = new Uint8ClampedArray(n); VV = new Uint8ClampedArray(n);
+    for (let i = 0; i < n; i++) {
+      const r = d[i*4]/255, g = d[i*4+1]/255, b = d[i*4+2]/255;
+      const mx = Math.max(r,g,b), mn = Math.min(r,g,b), c = mx - mn;
+      let h = 0;
+      if (c > 1e-6) {
+        if (mx === r) h = 60 * (((g-b)/c) % 6);
+        else if (mx === g) h = 60 * ((b-r)/c + 2);
+        else h = 60 * ((r-g)/c + 4);
+        if (h < 0) h += 360;
+      }
+      HH[i] = h / 2; SS[i] = mx <= 1e-6 ? 0 : (c/mx)*255; VV[i] = mx*255;
+    }
+  }
+  function maskFor(cls) {
+    const pad = SL.hue, m = new Uint8Array(CW * CH);
+    for (let i = 0; i < m.length; i++) {
+      if (SS[i] < SL.sat || VV[i] < SL.val) continue;
+      const h = HH[i];
+      for (let r = 0; r < cls.hue.length; r++)
+        if (h >= cls.hue[r][0] - pad && h <= cls.hue[r][1] + pad) { m[i] = 1; break; }
+    }
+    return m;
+  }
+  function open3(m) {
+    const e = new Uint8Array(m.length), o = new Uint8Array(m.length);
+    for (let y = 1; y < CH-1; y++) for (let x = 1; x < CW-1; x++) {
+      const i = y*CW + x;
+      if (m[i] && m[i-1] && m[i+1] && m[i-CW] && m[i+CW]) e[i] = 1;
+    }
+    for (let y = 1; y < CH-1; y++) for (let x = 1; x < CW-1; x++) {
+      const i = y*CW + x;
+      if (e[i] || e[i-1] || e[i+1] || e[i-CW] || e[i+CW]) o[i] = 1;
+    }
+    return o;
+  }
+  function blobs(m) {
+    const seen = new Uint8Array(m.length), out = [], stack = new Int32Array(m.length);
+    for (let i = 0; i < m.length; i++) {
+      if (!m[i] || seen[i]) continue;
+      let sp = 0, area = 0, sx = 0, sy = 0;
+      stack[sp++] = i; seen[i] = 1;
+      while (sp > 0) {
+        const p = stack[--sp], x = p % CW, y = (p / CW) | 0;
+        area++; sx += x; sy += y;
+        if (x > 0 && m[p-1] && !seen[p-1]) { seen[p-1] = 1; stack[sp++] = p-1; }
+        if (x < CW-1 && m[p+1] && !seen[p+1]) { seen[p+1] = 1; stack[sp++] = p+1; }
+        if (y > 0 && m[p-CW] && !seen[p-CW]) { seen[p-CW] = 1; stack[sp++] = p-CW; }
+        if (y < CH-1 && m[p+CW] && !seen[p+CW]) { seen[p+CW] = 1; stack[sp++] = p+CW; }
+      }
+      if (area >= SL.area && area <= 20000) out.push({ area, x: sx/area, y: sy/area });
+    }
+    return out;
+  }
+  let queued = false;
+  function runDet() {
+    if (queued || !HH) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      cctx.putImageData(baseImg, 0, 0);
+      cctx.save(); cctx.globalAlpha = 0.34; cctx.fillStyle = "#0a0c11";
+      cctx.fillRect(0, 0, CW, CH); cctx.restore();
+      let total = 0; const counts = {};
+      CLASSES.forEach(cls => {
+        counts[cls.label] = 0;
+        if (!activeCls[cls.label]) return;
+        const found = blobs(open3(maskFor(cls)));
+        counts[cls.label] = found.length; total += found.length;
+        const col = "rgb(" + cls.rgb.join(",") + ")";
+        found.forEach(bl => {
+          const r = Math.max(7, Math.sqrt(bl.area / Math.PI));
+          cctx.beginPath(); cctx.arc(bl.x, bl.y, r + 5, 0, Math.PI*2);
+          cctx.strokeStyle = col; cctx.lineWidth = 2.5; cctx.stroke();
+          cctx.beginPath(); cctx.arc(bl.x, bl.y, 2, 0, Math.PI*2);
+          cctx.fillStyle = col; cctx.fill();
+        });
+      });
+      const ok = total === EXPECTED;
+      verdict.className = "verdict " + (ok ? "good" : "bad");
+      verdict.innerHTML = "<b>" + total + " / " + EXPECTED + "</b> tubes detected" +
+        (ok ? " — matches ground truth" : (total > EXPECTED ? " — false positives" : " — tubes missed")) +
+        "<br><span style='color:var(--ink-3)'>" +
+        CLASSES.map(c => c.label + " " + counts[c.label]).join(" · ") + "</span>";
+    });
+  }
+  const camImg = new Image();
+  camImg.onload = () => {
+    CW = camc.width = camImg.naturalWidth; CH = camc.height = camImg.naturalHeight;
+    cctx.drawImage(camImg, 0, 0);
+    baseImg = cctx.getImageData(0, 0, CW, CH);
+    toHSV(baseImg.data);
+    runDet();
+  };
+  camImg.onerror = () => { verdict.textContent = "Camera frame unavailable."; };
+  camImg.src = "data/overhead.png";
+
+  /* ===================================================================== */
+  /*  workspace map — built from the same export the viewer uses            */
+  /* ===================================================================== */
+  const map = document.getElementById("map");
+  const maptip = document.getElementById("maptip");
+  function svg(tag, attrs, txt) {
+    const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (txt != null) n.textContent = txt;
+    return n;
+  }
+  function hoverable(node, title, detail) {
+    node.style.cursor = "pointer"; node.setAttribute("tabindex", "0");
+    const show = () => { maptip.innerHTML = "<b>" + title + "</b><br>" + detail; };
+    node.addEventListener("mouseenter", show);
+    node.addEventListener("focus", show);
+    node.addEventListener("click", show);
+    map.appendChild(node);
+  }
+  function buildMap() {
+    const w = D.workspace, mm = v => v * 1000;
+    const R = mm(D.arm.links[0] + D.arm.links[1]);
+    map.appendChild(svg("path", { d: "M 0 " + (-R) + " A " + R + " " + R + " 0 0 1 0 " + R,
+      fill: "none", stroke: "var(--line-2)", "stroke-width": 1.5, "stroke-dasharray": "5 5" }));
+    map.appendChild(svg("text", { x: R - 92, y: -R + 118, "text-anchor": "middle" },
+      Math.round(R) + " mm reach"));
+
+    const z = w.zone.map(mm);
+    const zr = svg("rect", { x: z[0], y: -z[3], width: z[1]-z[0], height: z[3]-z[2], rx: 4,
+      fill: "color-mix(in srgb, var(--accent) 12%, transparent)",
+      stroke: "var(--accent)", "stroke-width": 1.5, "stroke-dasharray": "6 4" });
+    hoverable(zr, "Pickup zone",
+      "x " + z[0] + " → " + z[1] + " mm<br>y " + z[2] + " → " + z[3] +
+      " mm<br>Tubes spawn here on a jittered grid, at least " +
+      Math.round(mm(0.04)) + " mm apart.");
+    map.appendChild(svg("text", { x: (z[0]+z[1])/2, y: 4, "text-anchor": "middle",
+      "font-size": 11 }, "PICKUP"));
+
+    const takes = {};
+    D.classes.forEach(c => { takes[c.rack] = (takes[c.rack] ? takes[c.rack] + " + " : "") + c.label; });
+    w.racks.forEach(r => {
+      r.slots.forEach((s, i) => {
+        const x = mm(s[0]), y = mm(s[1]);
+        const c = svg("circle", { cx: x, cy: -y, r: 13, fill: "var(--surface-2)",
+          stroke: "var(--line-2)", "stroke-width": 1.5 });
+        hoverable(c, r.label + " · slot " + i,
+          "x " + Math.round(x) + " mm, y " + Math.round(y) + " mm<br>Accepts: " +
+          (takes[r.id] || "—") + "<br>Reach from base: " +
+          Math.round(Math.hypot(x, y)) + " mm");
+      });
+      const xs = r.slots.map(s => mm(s[0])), ys = r.slots.map(s => mm(s[1]));
+      const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+      const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+      const spread = Math.max(...xs) - Math.min(...xs) > 50;
+      map.appendChild(svg("text", { x: cx, y: -cy + (spread ? (cy > 0 ? -24 : 32) : -95),
+        "text-anchor": "middle", "font-size": 11, fill: "var(--ink-2)" }, r.label));
+    });
+
+    const b = svg("circle", { cx: 0, cy: 0, r: 15, fill: "var(--ink)" });
+    hoverable(b, "Arm base", "Origin of the coordinate frame.<br>Shoulder axis " +
+      Math.round(mm(D.arm.base_height)) + " mm up.<br>Links: " +
+      D.arm.links.map(l => Math.round(mm(l))).join(" + ") + " mm.");
+    map.appendChild(svg("text", { x: 0, y: 34, "text-anchor": "middle" }, "ARM"));
+  }
+
+  /* ===================================================================== */
+  /*  robustness chart                                                      */
+  /* ===================================================================== */
+  const NOISE = [
+    { n: 0,  acc: 100, grasp: 100,  comp: 100,  f: "none" },
+    { n: 5,  acc: 100, grasp: 100,  comp: 100,  f: "none" },
+    { n: 10, acc: 100, grasp: 73.9, comp: 83.3, f: "grasp_missed ×9, misplaced ×1" },
+    { n: 15, acc: 100, grasp: 50.0, comp: 66.7, f: "grasp_missed ×20" },
+    { n: 20, acc: 87.5, grasp: 33.3, comp: 53.3, f: "grasp_missed ×31" },
+  ];
+  const SERIES = [
+    { k: "acc",   name: "Sorting accuracy", col: "var(--c1)" },
+    { k: "grasp", name: "Grasp success",    col: "var(--c2)" },
+    { k: "comp",  name: "Completion rate",  col: "var(--c3)" },
+  ];
+  const chart = document.getElementById("chart"), ctip = document.getElementById("ctip");
+  const MG = { l: 42, r: 96, t: 16, b: 38 }, CWD = 640, CHT = 300;
+  const cx = n => MG.l + (n / 20) * (CWD - MG.l - MG.r);
+  const cy = v => MG.t + (1 - (v - 25) / 75) * (CHT - MG.t - MG.b);
+
+  [25, 50, 75, 100].forEach(v => {
+    chart.appendChild(svg("line", { x1: MG.l, x2: CWD - MG.r, y1: cy(v), y2: cy(v),
+      stroke: "var(--line)", "stroke-width": 1 }));
+    chart.appendChild(svg("text", { x: MG.l - 9, y: cy(v) + 3.5, "text-anchor": "end" }, v + "%"));
+  });
+  NOISE.forEach(d => chart.appendChild(
+    svg("text", { x: cx(d.n), y: CHT - MG.b + 17, "text-anchor": "middle" }, d.n + " mm")));
+  chart.appendChild(svg("text", { x: (MG.l + CWD - MG.r) / 2, y: CHT - 4,
+    "text-anchor": "middle", fill: "var(--ink-3)" }, "injected localisation error (σ)"));
+  chart.appendChild(svg("line", { x1: cx(18), x2: cx(18), y1: MG.t, y2: CHT - MG.b,
+    stroke: "var(--line-2)", "stroke-width": 1, "stroke-dasharray": "3 4" }));
+  chart.appendChild(svg("text", { x: cx(18) - 6, y: MG.t + 11, "text-anchor": "end" },
+    "18 mm tolerance"));
+
+  SERIES.forEach(s => {
+    const d = NOISE.map((r, i) => (i ? "L" : "M") + cx(r.n) + " " + cy(r[s.k])).join(" ");
+    chart.appendChild(svg("path", { d, fill: "none", stroke: s.col, "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    NOISE.forEach(r => chart.appendChild(svg("circle", { cx: cx(r.n), cy: cy(r[s.k]), r: 4.5,
+      fill: s.col, stroke: "var(--surface)", "stroke-width": 2 })));
+    const last = NOISE[NOISE.length - 1];
+    chart.appendChild(svg("text", { x: CWD - MG.r + 10, y: cy(last[s.k]) + 3.5,
+      fill: s.col, class: "dl" }, s.name.split(" ")[0] + " " + last[s.k] + "%"));
+  });
+  NOISE.forEach(r => {
+    const hit = svg("rect", { x: cx(r.n) - 26, y: MG.t, width: 52,
+      height: CHT - MG.t - MG.b, fill: "transparent" });
+    hit.style.cursor = "crosshair";
+    hit.addEventListener("mouseenter", () => {
+      ctip.innerHTML = "<b>σ = " + r.n + " mm</b>" + SERIES.map(s =>
+        "<div><i style='background:" + s.col + "'></i>" + s.name + " " + r[s.k] + "%</div>").join("") +
+        "<div style='margin-top:5px;color:var(--ink-3)'>" + r.f + "</div>";
+      const box = chart.getBoundingClientRect(), sc = box.width / CWD;
+      ctip.style.opacity = "1";
+      ctip.style.left = Math.min(box.width - 175, cx(r.n) * sc + 12) + "px";
+      ctip.style.top = "18px";
+    });
+    hit.addEventListener("mouseleave", () => { ctip.style.opacity = "0"; });
+    chart.appendChild(hit);
+  });
+  document.getElementById("noisetable").innerHTML = NOISE.map(r =>
+    "<tr><td class='m'>" + r.n + " mm</td><td class='m'>" + r.acc + "%</td><td class='m'>" +
+    r.grasp + "%</td><td class='m'>" + r.comp + "%</td><td class='m' style='color:var(--ink-3)'>" +
+    r.f + "</td></tr>").join("");
+})();
+</script>

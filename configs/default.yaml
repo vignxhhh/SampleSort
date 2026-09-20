@@ -1,0 +1,59 @@
+# Global SampleSort settings.
+# `mode` selects which hardware-abstraction-layer implementations get used.
+mode: sim                      # sim | real
+
+seed: 42                       # default RNG seed for reproducible sim runs
+log_level: INFO                # python logging level for library code
+
+database_path: outputs/sortlog.db      # SQLite sort-log location
+output_dir: outputs                    # benchmark reports, datasets, checkpoints
+
+# Paths to the remaining config files, resolved relative to this file's directory.
+arm_config: arm_so101.yaml
+camera_config: camera.yaml
+workspace_config: workspace.yaml
+classes_config: classes.yaml
+
+pipeline:
+  control_mode: scripted       # scripted | learned
+  max_iterations: 24           # hard stop for the sort loop
+  grasp_retries: 1             # extra attempts after a failed grasp
+  settle_steps: 60             # sim steps to let the scene settle between jobs
+  policy_path: null            # ACT checkpoint directory used when control_mode == learned
+  # Std-dev of Gaussian error injected into each detection's table position, in
+  # metres. 0 disables it. Used by `samplesort benchmark --perception-noise` to
+  # characterise how much localisation error the grasp tolerance absorbs.
+  perception_noise_m: 0.0
+
+# Imitation-learning settings (ACT via Hugging Face LeRobot).
+# Only used by `samplesort record|train|evaluate` and `--mode learned`.
+learning:
+  fps: 10                      # dataset/control rate for recorded episodes
+  image_size: [96, 96]         # observations are downscaled to this before storage
+  dataset_repo_id: local/samplesort
+  dataset_dir: datasets/samplesort
+  checkpoint_dir: checkpoints/act
+  task_description: "Sort the sample tubes into their racks"
+
+  # ACT architecture. Kept small so the pipeline is runnable on CPU.
+  chunk_size: 20
+  n_action_steps: 20
+  dim_model: 256
+  n_heads: 8
+  dim_feedforward: 1024
+  n_encoder_layers: 4
+  n_decoder_layers: 1
+  vision_backbone: resnet18
+  use_vae: true
+
+  # Training loop.
+  steps: 2000
+  batch_size: 8
+  learning_rate: 1.0e-4
+  log_every: 50
+  save_every: 500
+  device: cpu                  # cpu | cuda | mps
+  num_workers: 0
+
+  # Evaluation rollouts.
+  rollout_max_steps: 150
