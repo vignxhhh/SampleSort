@@ -22,7 +22,7 @@ Resume rule: continue from the first unchecked item below.
 
 ## Post-build steps
 
-- [ ] Step 2 — Full system testing (clean install, headless suite, every CLI path).
+- [x] Step 2 — Full system testing (clean install, headless suite, every CLI path).
 - [ ] Step 3 — Acceptance verification against spec section 9.
 - [ ] Step 4 — Final polish (README, dead code, `.gitignore`, LICENSE).
 
@@ -461,3 +461,43 @@ Resume rule: continue from the first unchecked item below.
 - The demo GIF is a placeholder. Recording one needs a display for
   `sim-demo --gui`, which this build environment does not have. The README
   documents the exact command to record it.
+
+## Step 2 — Full system testing ✅
+
+| Check | Result |
+| --- | --- |
+| Clean install: fresh venv, `pip install -e .` | **PASS** — resolved and installed, console script works |
+| Suite headless, no hardware, no GPU | **PASS** — 292 passed in the dev env; 278 passed / 14 skipped in the torch-free env |
+| `sim-demo --seed 42 --num-tubes 8` sorts correctly and logs | **PASS** — 8/8, all 8 rows in the correct rack |
+| `run --mode scripted --dry-run` | **PASS** — exit 0, perceives and plans without moving |
+| `benchmark --trials 20` produces JSON + Markdown | **PASS** — 100% across 120 tubes, artefacts written |
+| `record` → `train` → `evaluate` end to end | **PASS** — 3 eps/93 frames → loss 4.39 → 3 rollouts scored |
+| `dashboard` launches and serves | **PASS** — HTTP 200, `/_stcore/health` = `ok`, 128 rows available |
+| CI workflow valid, same steps as local | **PASS** — ruff check, ruff format --check, mypy, pytest + CLI smoke, on 3.10 and 3.11 |
+| Every command's `--help` | **PASS** — all 8 commands plus the root |
+
+**Bugs this step found and fixed**
+
+1. **`RealArm.load_calibration()` imported LeRobot unconditionally.** Running the
+   clean-install suite (no torch, no LeRobot) surfaced `ModuleNotFoundError` where
+   an actionable `ArmError` was intended — exactly the path a user without the
+   optional extra would hit. Split into `read_calibration_file()` (pure, validates
+   presence, JSON and required fields) and `load_calibration()` (constructs
+   LeRobot objects, with its own install hint). Two new tests.
+2. **Dangling grasp constraint.** Retiring an unsortable tube removed its
+   PyBullet body while the gripper's fixed constraint still referenced it,
+   producing `removeConstraint failed` on stdout during `evaluate`. The pipeline
+   now releases the gripper before removing the body.
+3. **PyBullet banner polluted stdout.** `argv[0]=` was landing in the CLI's own
+   output. PyBullet writes it from native code to file descriptor 1, so Python
+   redirection does not catch it; `sim/_bullet.py` now imports PyBullet once
+   behind an fd-level redirect. stdout is now clean and pipeable; the build
+   banner correctly stays on stderr.
+
+**Dependency pinning**
+
+`pyproject.toml` now carries verified upper bounds, and `constraints.txt` records
+the exact versions everything was measured with. The core install was
+additionally verified against **opencv-python-headless 5.0.0.93** — newer than
+the 4.11 the dev environment uses — confirming the `<6` bound is real rather
+than assumed.

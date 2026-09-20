@@ -20,29 +20,37 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
+# Version bounds are pinned to a range that has been verified to work together.
+# `constraints.txt` records the exact versions the shipped benchmark numbers and
+# the 290-test suite were produced with; install with
+#   pip install -e . -c constraints.txt
+# to reproduce that environment exactly.
 dependencies = [
-    "numpy>=1.26",
-    "scipy>=1.11",
-    "opencv-python-headless>=4.9",
-    "pybullet>=3.2.6",
-    "pydantic>=2.6",
-    "PyYAML>=6.0",
-    "typer>=0.12",
-    "streamlit>=1.32",
-    "pandas>=2.0",
-    "altair>=5.0",
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    # ArUco lives in the main opencv module from 4.7 onwards; verified on 4.11 and 5.0.
+    "opencv-python-headless>=4.9,<6",
+    "pybullet>=3.2.6,<4",
+    "pydantic>=2.6,<3",
+    "PyYAML>=6.0,<7",
+    "typer>=0.12,<1",
+    "streamlit>=1.32,<2",
+    "pandas>=2.0,<4",
+    "altair>=5.0,<7",
 ]
 
 [project.optional-dependencies]
 learning = [
-    "torch>=2.2",
-    "torchvision>=0.17",
+    "torch>=2.2,<3",
+    "torchvision>=0.17,<1",
+    # LeRobot's dataset and policy APIs are not stable across minors; this code
+    # is written against 0.4.x and verified on 0.4.4.
     "lerobot>=0.4,<0.5",
 ]
 dev = [
-    "pytest>=8.0",
-    "ruff>=0.5",
-    "mypy>=1.9",
+    "pytest>=8.0,<10",
+    "ruff>=0.5,<1",
+    "mypy>=1.9,<3",
     "types-PyYAML>=6.0",
 ]
 

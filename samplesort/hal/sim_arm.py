@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-import pybullet as pb
 
 from samplesort.config import ArmConfig
 from samplesort.hal.arm import ArmError, ArmInterface, JointVector
+from samplesort.sim._bullet import pb
 from samplesort.sim.world import SIM_TIMESTEP, SimWorld
 
 logger = logging.getLogger(__name__)
@@ -214,7 +214,11 @@ class SimArm(ArmInterface):
         logger.debug("grasped tube %d at %.4f m from the TCP", body_id, distance)
 
     def release(self) -> None:
-        """Remove the grasp constraint so the held tube falls free."""
+        """Remove the grasp constraint so the held tube falls free.
+
+        Safe to call when nothing is held, when the constraint has already gone,
+        or after the world has been torn down.
+        """
         if self._grasp_constraint is not None and self.world.is_connected:
             try:
                 self.world.bullet.removeConstraint(self._grasp_constraint)

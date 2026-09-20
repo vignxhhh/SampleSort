@@ -100,17 +100,18 @@ class RealArm(ArmInterface):
             calibration=self.load_calibration(),
         )
 
-    def load_calibration(self) -> dict[str, Any]:
-        """Read the servo calibration LeRobot's bus requires.
+    def read_calibration_file(self) -> dict[str, dict[str, int]]:
+        """Read and validate the servo calibration file.
+
+        Kept free of any LeRobot import so that a bad path or a malformed file is
+        reported as such even on an install without the optional extra.
 
         Returns:
-            A mapping from motor name to ``MotorCalibration``.
+            A mapping from motor name to its raw calibration fields.
 
         Raises:
-            ArmError: If the file is missing or malformed.
+            ArmError: If the file is missing, unparseable, or missing fields.
         """
-        from lerobot.motors import MotorCalibration
-
         path = Path(self.config.servo_calibration_path)
         if not path.is_file():
             raise ArmError(
@@ -121,8 +122,49 @@ class RealArm(ArmInterface):
             )
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ArmError(f"could not read the servo calibration at {path}: {exc}") from exc
+
+        if not isinstance(raw, dict) or not raw:
+            raise ArmError(
+                f"could not read the servo calibration at {path}: expected a "
+                f"non-empty mapping of motor name to calibration fields"
+            )
+
+        required = {"id", "drive_mode", "homing_offset", "range_min", "range_max"}
+        for name, values in raw.items():
+            if not isinstance(values, dict) or not required.issubset(values):
+                missing = (
+                    sorted(required - set(values)) if isinstance(values, dict) else sorted(required)
+                )
+                raise ArmError(
+                    f"could not read the servo calibration at {path}: motor "
+                    f"'{name}' is missing {', '.join(missing)}"
+                )
+        return raw
+
+    def load_calibration(self) -> dict[str, Any]:
+        """Read the servo calibration as LeRobot ``MotorCalibration`` objects.
+
+        Returns:
+            A mapping from motor name to ``MotorCalibration``.
+
+        Raises:
+            ArmError: If the file is missing or malformed, or LeRobot is absent.
+        """
+        raw = self.read_calibration_file()
+        try:
+            from lerobot.motors import MotorCalibration
+        except ImportError as exc:
+            raise ArmError(
+                "Reading a servo calibration needs LeRobot. Install it with:\n"
+                '    pip install -e ".[learning]"'
+            ) from exc
+
+        path = Path(self.config.servo_calibration_path)
+        try:
             return {name: MotorCalibration(**values) for name, values in raw.items()}
-        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        except (TypeError, ValueError) as exc:
             raise ArmError(f"could not read the servo calibration at {path}: {exc}") from exc
 
     # ---------------------------------------------------------------- lifecycle

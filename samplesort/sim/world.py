@@ -13,10 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-import pybullet as pb
-import pybullet_utils.bullet_client as bc
 
 from samplesort.config import SampleSortConfig
+from samplesort.sim._bullet import bc, pb, quiet_stdout
 from samplesort.sim.assets.arm_builder import write_arm_urdf
 
 logger = logging.getLogger(__name__)
@@ -103,7 +102,8 @@ class SimWorld:
         if self._connected:
             return
         mode = pb.GUI if self.gui else pb.DIRECT
-        self.client = bc.BulletClient(connection_mode=mode)
+        with quiet_stdout():
+            self.client = bc.BulletClient(connection_mode=mode)
         self.client.setGravity(0.0, 0.0, -9.81)
         self.client.setPhysicsEngineParameter(
             fixedTimeStep=SIM_TIMESTEP, numSolverIterations=120, deterministicOverlappingPairs=1

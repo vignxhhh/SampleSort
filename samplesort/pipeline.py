@@ -411,6 +411,12 @@ class SortPipeline:
 
         if nearest is not None:
             logger.info("retiring unsortable %s tube %d", nearest.label, nearest.body_id)
+            # Drop any grasp constraint first: removing a body that a constraint
+            # still references leaves the constraint dangling, and PyBullet then
+            # complains on the next release.
+            release = getattr(self.backend.arm, "release", None)
+            if callable(release):
+                release()
             world.bullet.removeBody(nearest.body_id)
             world.tubes.remove(nearest)
 

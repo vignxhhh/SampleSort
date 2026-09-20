@@ -255,7 +255,7 @@ def test_gripper_position_can_be_read_back(arm: RealArm) -> None:
 def test_missing_calibration_says_how_to_fix_it(config: SampleSortConfig, tmp_path: Path) -> None:
     arm_config = config.arm.model_copy(update={"servo_calibration_path": tmp_path / "absent.json"})
     with pytest.raises(ArmError) as excinfo:
-        RealArm(arm_config).load_calibration()
+        RealArm(arm_config).read_calibration_file()
     message = str(excinfo.value)
     assert "no servo calibration" in message
     assert "hardware_setup" in message
@@ -266,7 +266,7 @@ def test_malformed_calibration_is_reported(config: SampleSortConfig, tmp_path: P
     path.write_text("{not json", encoding="utf-8")
     arm_config = config.arm.model_copy(update={"servo_calibration_path": path})
     with pytest.raises(ArmError, match="could not read the servo calibration"):
-        RealArm(arm_config).load_calibration()
+        RealArm(arm_config).read_calibration_file()
 
 
 def test_valid_calibration_loads(config: SampleSortConfig, tmp_path: Path) -> None:
@@ -284,9 +284,25 @@ def test_valid_calibration_loads(config: SampleSortConfig, tmp_path: Path) -> No
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     arm_config = config.arm.model_copy(update={"servo_calibration_path": path})
-    calibration = RealArm(arm_config).load_calibration()
+    calibration = RealArm(arm_config).read_calibration_file()
     assert set(calibration) == set(payload)
-    assert calibration[config.arm.joint_names[0]].range_max == 4095
+    assert calibration[config.arm.joint_names[0]]["range_max"] == 4095
+
+
+def test_calibration_missing_fields_is_reported(config: SampleSortConfig, tmp_path: Path) -> None:
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps({"base_yaw": {"id": 1}}), encoding="utf-8")
+    arm_config = config.arm.model_copy(update={"servo_calibration_path": path})
+    with pytest.raises(ArmError, match="is missing drive_mode"):
+        RealArm(arm_config).read_calibration_file()
+
+
+def test_empty_calibration_is_reported(config: SampleSortConfig, tmp_path: Path) -> None:
+    path = tmp_path / "calibration.json"
+    path.write_text("{}", encoding="utf-8")
+    arm_config = config.arm.model_copy(update={"servo_calibration_path": path})
+    with pytest.raises(ArmError, match="non-empty mapping"):
+        RealArm(arm_config).read_calibration_file()
 
 
 # ---------------------------------------------------------------- real backend

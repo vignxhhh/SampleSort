@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 
 import numpy as np
-import pybullet as pb
 
 from samplesort.config import CameraConfig
 from samplesort.hal.camera import CameraError, CameraInterface
+from samplesort.sim._bullet import pb
 from samplesort.sim.world import SimWorld
 
 logger = logging.getLogger(__name__)
