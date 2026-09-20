@@ -1,7 +1,8 @@
 # 🧪 SampleSort
 
-**A vision-guided robotic arm that sorts lab sample tubes — with a simulator you
-can run right now, and a hardware path behind the same interfaces.**
+**A vision-guided robotic arm that autonomously sorts lab sample tubes, using
+computer vision, inverse kinematics and imitation learning (ACT via LeRobot).
+Runs fully in PyBullet simulation, with SO-101 hardware support.**
 
 A camera watches a tabletop of sample tubes. SampleSort detects each one,
 classifies it by cap colour, decides which rack slot it belongs in, and commands
