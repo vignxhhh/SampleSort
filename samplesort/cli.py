@@ -161,6 +161,128 @@ def run(
     _exit_on_failure(report)
 
 
+@app.command("record")
+def record(
+    config_dir: ConfigDirOpt = None,
+    seed: SeedOpt = None,
+    episodes: Annotated[
+        int, typer.Option("--episodes", "-e", help="Demonstration episodes to record.")
+    ] = 20,
+    num_tubes: Annotated[
+        int, typer.Option("--num-tubes", "-n", help="Tubes spawned per episode.")
+    ] = 3,
+    dataset: Annotated[
+        Path | None, typer.Option("--dataset", "-d", help="Where to write the dataset.")
+    ] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace an existing dataset at that path.")
+    ] = False,
+    keep_failures: Annotated[
+        bool, typer.Option("--keep-failures", help="Keep episodes whose demo failed.")
+    ] = False,
+) -> None:
+    """Record demonstration episodes into a LeRobot dataset."""
+    from samplesort.learning.record import record_episodes
+
+    cfg = _load(config_dir, seed)
+    try:
+        stats = record_episodes(
+            cfg,
+            episodes=episodes,
+            num_tubes=num_tubes,
+            dataset_dir=dataset,
+            overwrite=overwrite,
+            seed=seed if seed is not None else cfg.seed,
+            keep_failures=keep_failures,
+        )
+    except FileExistsError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+
+    typer.echo(f"Recorded {stats.episodes} episode(s), {stats.frames} frames")
+    typer.echo(f"Successful demonstrations: {stats.successful_episodes}/{stats.episodes}")
+    typer.echo(f"Dataset: {stats.dataset_dir}")
+    if stats.is_empty:
+        raise typer.Exit(code=1)
+
+
+@app.command("train")
+def train(
+    config_dir: ConfigDirOpt = None,
+    dataset: Annotated[
+        Path | None, typer.Option("--dataset", "-d", help="Dataset to train on.")
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Where to save the checkpoint.")
+    ] = None,
+    steps: Annotated[int | None, typer.Option("--steps", help="Optimiser steps.")] = None,
+    batch_size: Annotated[int | None, typer.Option("--batch-size", help="Batch size.")] = None,
+    learning_rate: Annotated[
+        float | None, typer.Option("--learning-rate", help="Adam learning rate.")
+    ] = None,
+    device: Annotated[
+        str | None, typer.Option("--device", help="Torch device (cpu, cuda, mps).")
+    ] = None,
+) -> None:
+    """Train an ACT policy on a recorded dataset."""
+    from samplesort.learning.train import TrainingError
+    from samplesort.learning.train import train as run_training
+
+    cfg = _load(config_dir)
+    try:
+        result = run_training(
+            cfg,
+            dataset_dir=dataset,
+            output_dir=output,
+            steps=steps,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            device=device,
+        )
+    except TrainingError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+
+    typer.echo(f"Trained {result.steps} step(s) on {result.device}")
+    typer.echo(f"Frames: {result.num_frames} from {result.num_episodes} episode(s)")
+    typer.echo(f"Final loss: {result.final_loss:.4f}")
+    typer.echo(f"Checkpoint: {result.checkpoint_dir}")
+
+
+@app.command("evaluate")
+def evaluate(
+    config_dir: ConfigDirOpt = None,
+    seed: SeedOpt = None,
+    policy: Annotated[
+        Path | None, typer.Option("--policy", "-p", help="ACT checkpoint to evaluate.")
+    ] = None,
+    episodes: Annotated[int, typer.Option("--episodes", "-e", help="Rollouts to run.")] = 10,
+    num_tubes: Annotated[
+        int, typer.Option("--num-tubes", "-n", help="Tubes spawned per rollout.")
+    ] = 1,
+) -> None:
+    """Roll out a trained policy in simulation and report its success rate."""
+    from samplesort.learning.evaluate import evaluate as run_evaluation
+    from samplesort.learning.train import TrainingError
+
+    cfg = _load(config_dir, seed)
+    checkpoint = policy or cfg.pipeline.policy_path or cfg.learning.checkpoint_dir
+    try:
+        report = run_evaluation(
+            cfg,
+            checkpoint,
+            episodes=episodes,
+            num_tubes=num_tubes,
+            seed=seed if seed is not None else cfg.seed,
+        )
+    except TrainingError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
+
+    for line in report.summary_lines():
+        typer.echo(line)
+
+
 @app.command("benchmark")
 def benchmark(
     config_dir: ConfigDirOpt = None,

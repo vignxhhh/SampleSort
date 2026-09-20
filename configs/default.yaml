@@ -24,3 +24,36 @@ pipeline:
   # metres. 0 disables it. Used by `samplesort benchmark --perception-noise` to
   # characterise how much localisation error the grasp tolerance absorbs.
   perception_noise_m: 0.0
+
+# Imitation-learning settings (ACT via Hugging Face LeRobot).
+# Only used by `samplesort record|train|evaluate` and `--mode learned`.
+learning:
+  fps: 10                      # dataset/control rate for recorded episodes
+  image_size: [96, 96]         # observations are downscaled to this before storage
+  dataset_repo_id: local/samplesort
+  dataset_dir: datasets/samplesort
+  checkpoint_dir: checkpoints/act
+  task_description: "Sort the sample tubes into their racks"
+
+  # ACT architecture. Kept small so the pipeline is runnable on CPU.
+  chunk_size: 20
+  n_action_steps: 20
+  dim_model: 256
+  n_heads: 8
+  dim_feedforward: 1024
+  n_encoder_layers: 4
+  n_decoder_layers: 1
+  vision_backbone: resnet18
+  use_vae: true
+
+  # Training loop.
+  steps: 2000
+  batch_size: 8
+  learning_rate: 1.0e-4
+  log_every: 50
+  save_every: 500
+  device: cpu                  # cpu | cuda | mps
+  num_workers: 0
+
+  # Evaluation rollouts.
+  rollout_max_steps: 150

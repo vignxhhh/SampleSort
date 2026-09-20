@@ -16,7 +16,7 @@ Resume rule: continue from the first unchecked item below.
 - [x] **Phase 4 — Perception.** Calibration, detector, colour classifier, synthetic-image tests.
 - [x] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
 - [x] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
-- [ ] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
+- [x] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
 - [ ] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
 - [ ] **Phase 9 — Documentation.** README, architecture diagram, results.
 
@@ -305,3 +305,66 @@ Resume rule: continue from the first unchecked item below.
 - Without injected noise the scripted baseline saturates, so the headline table
   cannot distinguish a good controller from a perfect simulator. The noise sweep
   exists to give the results page something falsifiable to say.
+
+## Phase 7 — Learning ✅
+
+**Delivered**
+
+- `learning/_deps.py`: lazy torch/LeRobot imports with an actionable install
+  message, plus `resolve_device` fallback.
+- `learning/record.py`: `DemonstrationRecorder` and `record_episodes` writing
+  LeRobot-format datasets from scripted demonstrations.
+- `learning/train.py`: `load_dataset`, `build_policy_config`, `train`,
+  `load_policy`, and a `training_summary.json` artefact.
+- `learning/evaluate.py`: `evaluate` running K rollouts, `EvaluationReport`,
+  and an `evaluation.json` artefact.
+- `control/learned.py`: `LearnedController` running the ACT policy closed-loop.
+- New `learning:` config section; CLI `record`, `train`, `evaluate`.
+- `tests/test_learning.py` (23). Suite total: 258 passing.
+
+**Design decisions**
+
+- *`LearnedController` subclasses `ScriptedController`.* Waypoint planning,
+  feasibility checking, grasp sensing and placement verification are identical
+  between the two modes; only `execute()` differs. Subclassing means the pipeline,
+  the benchmark and the CLI accept either with no branching, and the two modes are
+  scored by exactly the same rules — which is what makes the comparison column meaningful.
+- *Demonstrations are recorded by replaying the scripted controller's solved
+  waypoints*, interpolated at the dataset frame rate, rather than by hooking into
+  `move_to_joints`. That keeps the HAL free of recording concerns and gives exact
+  control over the capture rate.
+- *Failed demonstrations are discarded by default.* Imitation learning from a
+  failed demonstration teaches the failure; `--keep-failures` is there for anyone
+  who wants them anyway.
+- *Datasets store PNG frames (`use_videos=False`).* Video encoding pulls in an
+  ffmpeg/codec dependency that would break CI and offline machines, and these
+  datasets are small enough that the size difference does not matter.
+- *`pretrained_backbone_weights=None`.* The ACT default downloads ImageNet
+  weights from the network on first use, which fails offline and in CI.
+- *Hugging Face libraries are forced offline* in `_deps._force_offline()`, because
+  LeRobot otherwise resolves a dataset's `repo_id` against the Hub even for a
+  purely local dataset. An explicit environment setting always wins, so opting in
+  to the Hub is still possible.
+- *An untrained policy emitting out-of-limit joint targets is a failed rollout,
+  not a crash.* `LearnedController.execute` catches `JointLimitError` and scores it
+  as `arm_error`.
+- *Observation space is the overhead image (downscaled to 96×96) plus five joints
+  and a gripper-open fraction*; the action space is the same six values. Small
+  images keep CPU training tractable, which is the whole point of the defaults.
+
+**Measured** (real runs, not estimates)
+
+- `samplesort record --episodes 3 --num-tubes 3`: 3 episodes, 93 frames,
+  3/3 successful demonstrations.
+- `samplesort train --steps 30 --batch-size 4`: loss 75.22 → 4.29 on CPU in ~4 s;
+  checkpoint written with `config.json`, `model.safetensors`, `training_summary.json`.
+- `samplesort evaluate --episodes 3 --num-tubes 1`: ran 3 rollouts, 0/3 successes,
+  all scored `grasp_missed`, `evaluation.json` written.
+
+**Known issues**
+
+- The evaluated policy performs badly (0% success). This is expected and is not a
+  pipeline defect: spec section 6 explicitly says not to train the policy as part
+  of the build. 30 optimiser steps on 93 frames cannot produce competent
+  manipulation. The pipeline demonstrably runs end to end, which is what was asked
+  for. A real run would want hundreds of episodes and tens of thousands of steps.

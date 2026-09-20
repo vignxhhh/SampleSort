@@ -395,6 +395,62 @@ class PipelineConfig(_Base):
     perception_noise_m: float = Field(default=0.0, ge=0.0)
 
 
+# ---------------------------------------------------------------------- learning
+
+
+class LearningConfig(_Base):
+    """Settings for recording, training and evaluating the ACT policy.
+
+    The architecture defaults are deliberately small: spec section 6 says the
+    build must make the record/train/evaluate pipeline *runnable*, not train a
+    competitive policy, and these values keep every step doable on CPU.
+    """
+
+    fps: int = Field(default=10, gt=0)
+    image_size: tuple[int, int] = (96, 96)
+    dataset_repo_id: str = "local/samplesort"
+    dataset_dir: Path = Path("datasets/samplesort")
+    checkpoint_dir: Path = Path("checkpoints/act")
+    task_description: str = "Sort the sample tubes into their racks"
+
+    chunk_size: int = Field(default=20, gt=0)
+    n_action_steps: int = Field(default=20, gt=0)
+    dim_model: int = Field(default=256, gt=0)
+    n_heads: int = Field(default=8, gt=0)
+    dim_feedforward: int = Field(default=1024, gt=0)
+    n_encoder_layers: int = Field(default=4, gt=0)
+    n_decoder_layers: int = Field(default=1, gt=0)
+    vision_backbone: str = "resnet18"
+    use_vae: bool = True
+
+    steps: int = Field(default=2000, gt=0)
+    batch_size: int = Field(default=8, gt=0)
+    learning_rate: float = Field(default=1e-4, gt=0.0)
+    log_every: int = Field(default=50, gt=0)
+    save_every: int = Field(default=500, gt=0)
+    device: str = "cpu"
+    num_workers: int = Field(default=0, ge=0)
+
+    rollout_max_steps: int = Field(default=150, gt=0)
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> LearningConfig:
+        if self.n_action_steps > self.chunk_size:
+            raise ValueError(
+                f"learning.n_action_steps ({self.n_action_steps}) cannot exceed "
+                f"chunk_size ({self.chunk_size})"
+            )
+        if self.dim_model % self.n_heads != 0:
+            raise ValueError(
+                f"learning.dim_model ({self.dim_model}) must be divisible by "
+                f"n_heads ({self.n_heads})"
+            )
+        width, height = self.image_size
+        if width <= 0 or height <= 0:
+            raise ValueError(f"learning.image_size must be positive, got {self.image_size}")
+        return self
+
+
 # ------------------------------------------------------------------------ bundle
 
 
@@ -407,6 +463,7 @@ class SampleSortConfig(_Base):
     database_path: Path
     output_dir: Path
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    learning: LearningConfig = Field(default_factory=LearningConfig)
 
     arm: ArmConfig
     camera: CameraConfig
