@@ -39,3 +39,14 @@ baudrate: 1000000
 servo_model: sts3215
 servo_ids: [1, 2, 3, 4, 5]
 gripper_servo_id: 6
+
+# Written by LeRobot's own calibration tool; see docs/hardware_setup.md.
+# The Feetech bus refuses normalised reads and writes without it.
+servo_calibration_path: configs/so101_calibration.json
+
+# Mapping between SampleSort's kinematic convention and the servos'.
+# The bus reports degrees measured from each joint's calibrated mid-position, so
+# these align that zero with the kinematic zero (arm extended horizontally along
+# +X, tool pointing along +X). Both are measured during bring-up.
+servo_offsets_deg: [0.0, 0.0, 0.0, 0.0, 0.0]
+servo_signs: [1, 1, 1, 1, 1]

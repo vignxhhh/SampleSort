@@ -17,7 +17,7 @@ Resume rule: continue from the first unchecked item below.
 - [x] **Phase 5 — Planning + Pipeline.** Rack state, task planner, full sort loop, SQLite logging.
 - [x] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
 - [x] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
-- [ ] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
+- [x] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
 - [ ] **Phase 9 — Documentation.** README, architecture diagram, results.
 
 ## Post-build steps
@@ -368,3 +368,64 @@ Resume rule: continue from the first unchecked item below.
   of the build. 30 optimiser steps on 93 frames cannot produce competent
   manipulation. The pipeline demonstrably runs end to end, which is what was asked
   for. A real run would want hundreds of episodes and tens of thousands of steps.
+
+## Phase 8 — Real hardware path ✅
+
+**Delivered**
+
+- `hal/real_arm.py`: `RealArm` over LeRobot's `FeetechMotorsBus`, with unit and
+  frame conversion, streamed trajectories, joint-limit enforcement and
+  calibration loading.
+- `hal/real_camera.py`: `RealCamera` over `cv2.VideoCapture`, with resolution
+  verification, warm-up frames and dropped-frame retries.
+- `scripts/generate_aruco_board.py` and `scripts/calibrate_camera.py`.
+- CLI: `samplesort calibrate [--generate-board] [--image] [--output]`.
+- `docs/hardware_setup.md`: BOM, geometry, bring-up, calibration, safety,
+  troubleshooting.
+- New arm config keys: `servo_calibration_path`, `servo_offsets_deg`, `servo_signs`.
+- `tests/test_real_hal.py` (31) plus a board round-trip test. Suite total: 290 passing.
+
+**Design decisions**
+
+- *Written against the installed LeRobot 0.4.4 source, not against assumptions.*
+  Verified by reading `lerobot/motors/feetech/feetech.py` and
+  `lerobot/robots/so_follower/`: motors are declared as
+  `{name: Motor(id, model, norm_mode)}`, body joints use `MotorNormMode.DEGREES`
+  and the gripper `RANGE_0_100`, and motion goes through
+  `sync_read("Present_Position")` / `sync_write("Goal_Position", ...)`.
+- *Calibration is required, and says so.* `_normalize` in LeRobot's bus raises
+  `"has no calibration registered"` without one. `RealArm` loads a calibration
+  file up front and fails with a message naming the fix and the doc, rather than
+  letting an opaque SDK error surface mid-run.
+- *Two explicit conversions, both configurable.* The bus reports degrees from each
+  joint's calibrated mid-position; the kinematics use radians from a different
+  zero. `servo_offsets_deg` and `servo_signs` bridge them, and §3.3 of the
+  hardware doc is a measured procedure rather than a guess.
+- *Moves are streamed, not sent as a single goal.* Writing one `Goal_Position`
+  would let each servo slew at its own internal rate; interpolating at 50 Hz gives
+  the same smoothstep profile the simulator uses.
+- *The camera verifies the resolution it actually got.* Many webcams silently
+  ignore a `set()` and deliver a different size — and a homography fitted at one
+  resolution is wrong at another. This is caught at `connect()` rather than
+  becoming mysterious grasp errors.
+- *Warm-up frames are discarded.* Auto-exposure needs a moment, and a dark first
+  frame would fail every HSV threshold.
+- *The board generator and the ArUco solver share
+  `board_corner_table_positions`*, so the printed target and the solver cannot
+  disagree about marker ids, corner ordering or orientation. A test renders the
+  real script's output and fits it: 0.96 px residual, 0.08 mm on the table plane.
+
+**Measured**
+
+- Generated board → `calibrate_from_aruco`: 10 markers detected, 0.96 px
+  reprojection residual, 0.08 mm table-plane residual, exact corner round-trip.
+
+**Known issues**
+
+- **Not validated on physical hardware.** No SO-101 was available. The logic
+  between SampleSort and the hardware — conversions, limit enforcement,
+  calibration handling, error paths — is covered by 31 tests against fakes, but
+  the serial link itself has never been exercised. `docs/hardware_setup.md` and
+  `docs/results.md` both say so plainly.
+- The HSV thresholds in `classes.yaml` are tuned for the simulator's rendering and
+  will need retuning under real lighting. §4.4 of the hardware doc covers it.

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -220,3 +221,53 @@ def test_analytic_calibration_inverts_a_known_projection(config: SampleSortConfi
     for x, y in [(0.10, 0.05), (0.25, -0.12), (0.30, 0.0)]:
         u, v = table_to_synth_pixel(x, y)
         assert calibration.pixel_to_table(u, v) == pytest.approx((x, y), abs=1e-6)
+
+
+# ------------------------------------------------- printable board round trip
+
+
+def test_generated_board_is_read_back_by_the_calibrator(
+    config: SampleSortConfig, tmp_path: Path
+) -> None:
+    """The printable board and the solver must agree about the layout.
+
+    This runs the real generator script and feeds its PNG straight into
+    `calibrate_from_aruco`. If the two ever disagree about marker ids, corner
+    ordering or the table-frame orientation, the fit degrades and this fails —
+    which is far better than discovering it with a printed sheet and a robot.
+    """
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parent.parent
+    output = tmp_path / "board.png"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "generate_aruco_board.py"),
+            "--config-dir",
+            str(config.config_dir),
+            "--output",
+            str(output),
+            "--dpi",
+            "200",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert output.is_file()
+
+    frame = cv2.imread(str(output))
+    assert frame is not None
+
+    calibration = calibrate_from_aruco(frame, config.workspace.marker_board, config.camera)
+    assert calibration.rms_error_px < 2.0
+    assert calibration.rms_error_m < 1e-3
+
+    # Every marker corner must map back to where the board config says it is.
+    for quad in board_corner_table_positions(config.workspace.marker_board).values():
+        for x, y in quad:
+            u, v = calibration.table_to_pixel(float(x), float(y))
+            assert calibration.pixel_to_table(u, v) == pytest.approx((x, y), abs=1e-6)

@@ -70,6 +70,9 @@ class ArmConfig(_Base):
     servo_model: str = "sts3215"
     servo_ids: list[int] = Field(default_factory=list)
     gripper_servo_id: int = 6
+    servo_calibration_path: Path = Path("configs/so101_calibration.json")
+    servo_offsets_deg: list[float] = Field(default_factory=lambda: [0.0] * 5)
+    servo_signs: list[int] = Field(default_factory=lambda: [1] * 5)
 
     @field_validator("link_lengths")
     @classmethod
@@ -105,6 +108,12 @@ class ArmConfig(_Base):
                     raise ValueError(f"{field_name} for '{name}' ({q}) violates its joint limits")
         if self.servo_ids and len(self.servo_ids) != n:
             raise ValueError("servo_ids must have one entry per joint when provided")
+        if len(self.servo_offsets_deg) != n:
+            raise ValueError("servo_offsets_deg must have one entry per joint")
+        if len(self.servo_signs) != n:
+            raise ValueError("servo_signs must have one entry per joint")
+        if any(sign not in (-1, 1) for sign in self.servo_signs):
+            raise ValueError(f"servo_signs entries must be +1 or -1, got {self.servo_signs}")
         return self
 
     @property

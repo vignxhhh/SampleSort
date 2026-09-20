@@ -161,6 +161,66 @@ def run(
     _exit_on_failure(report)
 
 
+@app.command("calibrate")
+def calibrate(
+    config_dir: ConfigDirOpt = None,
+    image: Annotated[
+        Path | None, typer.Option("--image", "-i", help="Fit this saved frame instead.")
+    ] = None,
+    output: Annotated[
+        Path | None, typer.Option("--output", "-o", help="Where to save the calibration.")
+    ] = None,
+    save_frame: Annotated[
+        Path | None, typer.Option("--save-frame", help="Also save the frame that was used.")
+    ] = None,
+    generate_board: Annotated[
+        bool, typer.Option("--generate-board", help="Render the printable ArUco board and exit.")
+    ] = False,
+    board_output: Annotated[
+        Path, typer.Option("--board-output", help="Where to write the board PNG.")
+    ] = Path("docs/aruco_board.png"),
+    dpi: Annotated[int, typer.Option("--dpi", help="Print resolution for the board.")] = 300,
+) -> None:
+    """Fit the camera-to-table homography from the printed ArUco board.
+
+    In sim mode the calibration is derived analytically from the known camera
+    pose, so this is only needed for real hardware. Pass ``--generate-board``
+    first to print the target.
+    """
+    import subprocess
+
+    cfg = _load(config_dir)
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+
+    if generate_board:
+        command = [
+            sys.executable,
+            str(scripts / "generate_aruco_board.py"),
+            "--config-dir",
+            str(cfg.config_dir),
+            "--output",
+            str(board_output),
+            "--dpi",
+            str(dpi),
+        ]
+        raise typer.Exit(code=subprocess.call(command))
+
+    command = [
+        sys.executable,
+        str(scripts / "calibrate_camera.py"),
+        "--config-dir",
+        str(cfg.config_dir),
+    ]
+    if image is not None:
+        command += ["--image", str(image)]
+    if output is not None:
+        command += ["--output", str(output)]
+    if save_frame is not None:
+        command += ["--save-frame", str(save_frame)]
+
+    raise typer.Exit(code=subprocess.call(command))
+
+
 @app.command("record")
 def record(
     config_dir: ConfigDirOpt = None,

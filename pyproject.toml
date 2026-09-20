@@ -73,7 +73,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D100", "D101", "D102", "D103", "D104"]
+# Test doubles must mirror the real signatures they stand in for, so unused
+# method and lambda arguments are expected there. ARG001 stays on, so a genuinely
+# unused fixture in a test function is still flagged.
+"tests/*" = ["D100", "D101", "D102", "D103", "D104", "ARG002", "ARG005"]
 "scripts/*" = ["D100", "D103"]
 "dashboard/*" = ["D100", "D103"]
 
