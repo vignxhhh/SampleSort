@@ -154,7 +154,7 @@ headless CPU. Real output from `samplesort benchmark --trials 20`.
 | Sorting accuracy (correct rack) | **100.0%** |
 | Grasp success rate | **100.0%** |
 | Completion rate | **100.0%** |
-| Mean time per sample | **0.38 s** ± 0.03 |
+| Mean time per sample | **0.39 s** ± 0.04 |
 | Failures | none |
 
 Simulated perception is ~1 mm accurate against an 18 mm grasp tolerance, so the
@@ -224,7 +224,7 @@ samplesort/
 │   └── benchmark.py          # seeded trials → JSON + Markdown
 ├── dashboard/app.py          # Streamlit view of the sort log
 ├── scripts/                  # ArUco board generator, camera calibration
-├── tests/                    # 290 tests, all headless
+├── tests/                    # 291 tests, all headless
 └── docs/                     # architecture, hardware setup, results
 ```
 
@@ -236,7 +236,7 @@ pip install -e ".[dev,learning]"
 ruff check .            # lint
 ruff format --check .   # formatting
 mypy samplesort/        # type check (strict: no untyped defs)
-pytest -q               # 290 tests, headless, no GPU
+pytest -q               # 291 tests, headless, no GPU
 ```
 
 CI runs exactly these four steps on Python 3.10 and 3.11, plus a CLI smoke test.

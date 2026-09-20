@@ -16,8 +16,8 @@ given `--trials` and seed always reproduce the same layouts and the same numbers
 
 ## Headline result — scripted mode
 
-Run on 2026-09-20T00:11:07+00:00, 20 trials × 6 tubes
-= 120 tubes, at commit `dae8736`.
+Run on 2026-09-20T01:23:28+00:00, 20 trials × 6 tubes
+= 120 tubes, at commit `b6a8979`.
 
 | Metric | scripted mode |
 | --- | ---: |
@@ -28,8 +28,8 @@ Run on 2026-09-20T00:11:07+00:00, 20 trials × 6 tubes
 | Sorting accuracy (correct rack) | 100.0% |
 | Grasp success rate | 100.0% |
 | Completion rate | 100.0% |
-| Mean time per sample | 0.38 s ± 0.03 |
-| Total wall-clock | 55.4 s |
+| Mean time per sample | 0.39 s ± 0.04 |
+| Total wall-clock | 56.8 s |
 
 **Failures by type**
 
@@ -114,6 +114,10 @@ baseline; that is expected and is not a defect in the pipeline.
 | SciPy | 1.17.1 |
 | OpenCV | 4.11.0.86 |
 | PyBullet | 3.2.7 |
+| SampleSort | 1.0.0 |
+
+CI additionally runs the full suite on Python 3.10 with opencv 5.0, so both
+combinations in `pyproject.toml`'s declared range are exercised.
 
 The benchmark runs headless (`DIRECT` mode) on CPU. No GPU and no hardware are
 involved, which is what lets CI run the same numbers.

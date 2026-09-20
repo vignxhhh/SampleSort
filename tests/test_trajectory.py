@@ -6,16 +6,8 @@ import numpy as np
 import pytest
 
 from samplesort.config import SampleSortConfig
-from samplesort.control.trajectory import (
-    angular_distance,
-    duration_for,
-    interpolate,
-    is_monotonic,
-    max_joint_step,
-    path_length,
-    resample,
-    smoothstep,
-)
+from samplesort.control.trajectory import duration_for, interpolate, smoothstep
+from tests.assertions import is_monotonic, max_joint_step
 
 
 def test_smoothstep_endpoints_and_midpoint() -> None:
@@ -83,27 +75,6 @@ def test_duration_respects_max_velocity(config: SampleSortConfig) -> None:
     path = interpolate(start, end, int(seconds * 240))
     peak_velocity = max_joint_step(path) * 240
     assert peak_velocity <= config.arm.max_joint_velocity * 1.05
-
-
-def test_resample_expands_a_waypoint_list() -> None:
-    waypoints = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]
-    path = resample(waypoints, 8)
-    assert path.shape == (1 + 2 * 8, 2)
-    np.testing.assert_allclose(path[0], waypoints[0])
-    np.testing.assert_allclose(path[-1], waypoints[-1])
-
-
-def test_resample_needs_two_waypoints() -> None:
-    with pytest.raises(ValueError, match="at least two waypoints"):
-        resample([[0.0, 0.0]], 5)
-
-
-def test_path_length_matches_manhattan_of_segments() -> None:
-    assert path_length([[0.0, 0.0], [3.0, 4.0], [3.0, 4.0]]) == pytest.approx(5.0)
-
-
-def test_angular_distance() -> None:
-    assert angular_distance([0.0, 0.0], [3.0, 4.0]) == pytest.approx(5.0)
 
 
 def test_is_monotonic_detects_a_reversal() -> None:

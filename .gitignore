@@ -28,6 +28,9 @@ checkpoints/
 *.sqlite3
 wandb/
 
+# Generated at runtime from arm_so101.yaml on every sim connect
+samplesort/sim/assets/*_generated.urdf
+
 # Generated calibration data
 configs/camera_intrinsics.yaml
 configs/homography.npz

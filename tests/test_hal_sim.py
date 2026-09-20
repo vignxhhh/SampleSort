@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -177,3 +178,73 @@ def test_labels_cover_every_class_when_count_allows(backend: Backend) -> None:
     assert backend.world is not None
     labels = {t.label for t in backend.world.spawn_tubes(8)}
     assert labels == set(backend.world.config.classes.labels)
+
+
+def test_generated_urdf_matches_the_config(config: SampleSortConfig, tmp_path: Path) -> None:
+    from samplesort.sim.assets.arm_builder import write_arm_urdf
+
+    path = write_arm_urdf(config.arm, tmp_path)
+    urdf = path.read_text()
+
+    assert path.name == f"{config.arm.name}_generated.urdf"
+    assert urdf.startswith("<?xml")
+    # Every configured joint appears, with its configured limits.
+    for name, (low, high) in zip(config.arm.joint_names, config.arm.joint_limits, strict=True):
+        assert f'<joint name="{name}" type="revolute">' in urdf
+        assert f'lower="{low:.6f}" upper="{high:.6f}"' in urdf
+    # Link lengths come from the config, not from constants in the builder.
+    for length in config.arm.link_lengths:
+        assert f"{length:.6f}" in urdf
+
+
+def test_urdf_falls_back_when_the_package_directory_is_read_only(
+    config: SampleSortConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-editable install has a read-only package directory.
+
+    Permissions cannot be used to provoke this in the test suite, because the
+    suite may run as root, so the failing write is simulated directly.
+    """
+    import tempfile
+
+    from samplesort.sim.assets import arm_builder
+
+    assets_dir = Path(arm_builder.__file__).resolve().parent
+    real_write_text = Path.write_text
+
+    def refuse_in_package(self: Path, *args: object, **kwargs: object) -> int:
+        if self.parent == assets_dir:
+            raise OSError(30, "Read-only file system")
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", refuse_in_package)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    path = arm_builder.write_arm_urdf(config.arm)
+    assert path.is_file()
+    assert tmp_path in path.parents
+    assert path.read_text().startswith("<?xml")
+
+
+def test_sim_world_connects_with_a_read_only_package_directory(
+    config: SampleSortConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole simulation must still start from a read-only install."""
+    import tempfile
+
+    from samplesort.sim.assets import arm_builder
+
+    assets_dir = Path(arm_builder.__file__).resolve().parent
+    real_write_text = Path.write_text
+
+    def refuse_in_package(self: Path, *args: object, **kwargs: object) -> int:
+        if self.parent == assets_dir:
+            raise OSError(30, "Read-only file system")
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", refuse_in_package)
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    with SimWorld(config, seed=1) as world:
+        assert world.arm_id >= 0
+        assert len(world.spawn_tubes(2)) == 2

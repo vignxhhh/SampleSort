@@ -1,9 +1,14 @@
-"""Smooth joint-space interpolation between waypoints."""
+"""Smooth joint-space interpolation between waypoints.
+
+Both arm backends and the scripted controller drive motion through these three
+functions: :func:`smoothstep` shapes the time profile, :func:`interpolate` turns
+a pair of configurations into eased setpoints, and :func:`duration_for` times a
+move so no joint exceeds its configured maximum velocity.
+"""
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 
 import numpy as np
 
@@ -70,68 +75,3 @@ def duration_for(config: ArmConfig, start: JointVector, end: JointVector) -> flo
         return 0.05
     peak_factor = 1.5
     return max(0.05, peak_factor * travel / config.max_joint_velocity)
-
-
-def path_length(waypoints: Sequence[JointVector]) -> float:
-    """Total joint-space path length across a sequence of waypoints.
-
-    Args:
-        waypoints: Ordered joint configurations.
-
-    Returns:
-        The summed Euclidean distance between consecutive waypoints, in radians.
-    """
-    points = [np.asarray(w, dtype=float) for w in waypoints]
-    return float(sum(np.linalg.norm(b - a) for a, b in zip(points, points[1:], strict=False)))
-
-
-def resample(waypoints: Sequence[JointVector], steps_per_segment: int) -> np.ndarray:
-    """Expand a coarse waypoint list into a smoothly interpolated path.
-
-    Args:
-        waypoints: At least two ordered joint configurations.
-        steps_per_segment: Interpolation steps to insert between each pair.
-
-    Returns:
-        A ``(1 + (len(waypoints) - 1) * steps_per_segment, num_joints)`` array
-        starting at the first waypoint.
-
-    Raises:
-        ValueError: If fewer than two waypoints are supplied.
-    """
-    if len(waypoints) < 2:
-        raise ValueError("resample needs at least two waypoints")
-    path = [np.asarray(waypoints[0], dtype=float)]
-    for a, b in zip(waypoints, waypoints[1:], strict=False):
-        path.extend(interpolate(a, b, steps_per_segment))
-    return np.asarray(np.vstack(path), dtype=float)
-
-
-def max_joint_step(path: np.ndarray) -> float:
-    """Largest single-joint change between consecutive waypoints, in radians."""
-    if len(path) < 2:
-        return 0.0
-    return float(np.max(np.abs(np.diff(path, axis=0))))
-
-
-def is_monotonic(path: np.ndarray, *, tolerance: float = 1e-9) -> bool:
-    """Whether every joint moves monotonically along the path.
-
-    A smoothstep interpolation between two endpoints never overshoots, so this
-    holds for any single-segment path and is a useful invariant to assert on.
-
-    Args:
-        path: A ``(steps, num_joints)`` array.
-        tolerance: Slack absorbing floating-point noise.
-    """
-    if len(path) < 2:
-        return True
-    deltas = np.diff(path, axis=0)
-    rising = np.all(deltas >= -tolerance, axis=0)
-    falling = np.all(deltas <= tolerance, axis=0)
-    return bool(np.all(rising | falling))
-
-
-def angular_distance(a: JointVector, b: JointVector) -> float:
-    """Euclidean distance in radians between two joint configurations."""
-    return float(np.linalg.norm(np.asarray(b, dtype=float) - np.asarray(a, dtype=float)))

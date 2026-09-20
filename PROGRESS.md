@@ -24,7 +24,7 @@ Resume rule: continue from the first unchecked item below.
 
 - [x] Step 2 — Full system testing (clean install, headless suite, every CLI path).
 - [x] Step 3 — Acceptance verification against spec section 9.
-- [ ] Step 4 — Final polish (README, dead code, `.gitignore`, LICENSE).
+- [x] Step 4 — Final polish (README, dead code, `.gitignore`, LICENSE).
 
 ---
 
@@ -652,8 +652,9 @@ The workflow's exact steps in a pristine venv:
 [CLI smoke] --version, config, sim-demo (4/4 sorted), run --dry-run   OK
 ```
 
-Confirmed green on GitHub Actions on both matrix legs:
-[run #2](https://github.com/vignxhhh/SampleSort/actions/runs/35480902335).
+Confirmed green on GitHub Actions on both the 3.10 and 3.11 matrix legs:
+[run #2](https://github.com/vignxhhh/SampleSort/actions/runs/35481076283)
+(`conclusion: success`).
 
 ### AC7 — README explains the project, sim, hardware and results · **PASS**
 
@@ -667,3 +668,46 @@ Confirmed green on GitHub Actions on both matrix legs:
 Also carries a Mermaid architecture diagram, a marked demo-GIF placeholder, the
 project structure, development commands, and a roadmap covering every stretch
 goal from spec section 10.
+
+## Step 4 — Final polish ✅
+
+**Dead code removed**
+
+An AST audit compared every function definition in `samplesort/` against its
+references across the library, tests, scripts and dashboard.
+
+- `SimArm.tool_position()` — zero references anywhere; duplicated
+  `SimWorld.tool_pose()`, which is what the controller actually calls.
+- `trajectory.resample`, `path_length`, `angular_distance` — no product caller.
+  The module now ships only the three functions the arms and the controller use:
+  `smoothstep`, `interpolate`, `duration_for`.
+- `trajectory.max_joint_step` and `is_monotonic` moved to `tests/assertions.py`.
+  They state real invariants about generated paths, but only the tests need them,
+  so they belong with the tests rather than in the shipped library.
+
+Re-audited afterwards: zero unreferenced definitions (Typer commands and Pydantic
+validators excluded, since both are invoked by decorator).
+
+No stray `print()` in library code, no `FIXME`/`XXX`/`HACK`, no `breakpoint()`,
+no `NotImplementedError` stubs. The single remaining `TODO` is the demo-GIF
+placeholder the spec asks for.
+
+**A real bug found while polishing**
+
+`so101_generated.urdf` was tracked in git, which exposed a worse problem:
+`write_arm_urdf` wrote into the installed package directory, which is **read-only
+under a non-editable `pip install`** — the simulator would have failed to start
+for anyone who installed normally rather than with `-e`. It now falls back to a
+temp directory. Two tests cover it (simulating the failing write rather than
+using permissions, since the suite may run as root): one for the fallback, one
+proving the whole `SimWorld` still connects and spawns tubes that way.
+
+**Housekeeping**
+
+- `.gitignore` covers venvs, `__pycache__`, tool caches, `outputs/`, `datasets/`,
+  `checkpoints/`, `*.db`, generated calibration data and the generated URDF.
+  Nothing generated is tracked.
+- MIT `LICENSE` added.
+- README, `docs/results.md` and the test counts refreshed against the final run.
+
+**Final state: 291 tests passing, ruff clean, mypy clean on 3.10 and 3.11, CI green.**

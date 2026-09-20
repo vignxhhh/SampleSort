@@ -204,7 +204,7 @@ def test_move_streams_setpoints_and_lands_on_target(arm: RealArm, fake_bus: Fake
 
 
 def test_streamed_path_is_monotonic(arm: RealArm, fake_bus: FakeBus) -> None:
-    from samplesort.control.trajectory import is_monotonic
+    from tests.assertions import is_monotonic
 
     arm.move_to_joints(arm.config.home_position, duration=0.1)
     joint = arm.config.joint_names[1]

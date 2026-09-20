@@ -16,6 +16,7 @@ frames are chosen so that:
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 
 from samplesort.config import ArmConfig
@@ -166,18 +167,47 @@ def build_arm_urdf(config: ArmConfig) -> str:
 
 
 def write_arm_urdf(config: ArmConfig, directory: Path | str | None = None) -> Path:
-    """Write the generated URDF next to the other simulation assets.
+    """Write the generated URDF where PyBullet can load it from.
+
+    The preferred home is next to the other simulation assets, which keeps the
+    file easy to inspect during development. That directory is read-only under a
+    system-wide (non-editable) install, so this falls back to a temporary
+    directory rather than failing — the file is regenerated from config on every
+    connect, so its location carries no state.
 
     Args:
         config: Arm configuration to generate from.
-        directory: Destination directory. Defaults to ``samplesort/sim/assets``.
+        directory: Destination directory. Defaults to ``samplesort/sim/assets``,
+            with a temp-directory fallback.
 
     Returns:
         Path to the written ``.urdf`` file.
+
+    Raises:
+        OSError: If an explicitly requested ``directory`` cannot be written to.
     """
-    target_dir = Path(directory) if directory is not None else Path(__file__).resolve().parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    path = target_dir / f"{config.name}_generated.urdf"
-    path.write_text(build_arm_urdf(config), encoding="utf-8")
-    logger.debug("wrote generated arm URDF to %s", path)
-    return path
+    filename = f"{config.name}_generated.urdf"
+    urdf = build_arm_urdf(config)
+
+    if directory is not None:
+        target_dir = Path(directory)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / filename
+        path.write_text(urdf, encoding="utf-8")
+        return path
+
+    for candidate in (Path(__file__).resolve().parent, Path(tempfile.gettempdir()) / "samplesort"):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            path = candidate / filename
+            path.write_text(urdf, encoding="utf-8")
+        except OSError as exc:
+            logger.debug("cannot write the arm URDF to %s (%s); trying elsewhere", candidate, exc)
+            continue
+        logger.debug("wrote generated arm URDF to %s", path)
+        return path
+
+    raise OSError(
+        f"could not write {filename} to the package assets directory or to "
+        f"{tempfile.gettempdir()}; pass an explicit directory instead"
+    )

@@ -7,7 +7,7 @@ import logging
 import numpy as np
 
 from samplesort.config import ArmConfig
-from samplesort.hal.arm import ArmError, ArmInterface, JointVector
+from samplesort.hal.arm import ArmInterface, JointVector
 from samplesort.sim._bullet import pb
 from samplesort.sim.world import SIM_TIMESTEP, SimWorld
 
@@ -226,14 +226,3 @@ class SimArm(ArmInterface):
                 logger.debug("grasp constraint %s was already removed", self._grasp_constraint)
         self._grasp_constraint = None
         self._grasped_body = None
-
-    def tool_position(self) -> np.ndarray:
-        """Return the tool centre point in world coordinates.
-
-        Raises:
-            ArmError: If the arm is not connected.
-        """
-        if not self.world.is_connected:
-            raise ArmError("simulation world is not connected")
-        position, _ = self.world.tool_pose()
-        return position
