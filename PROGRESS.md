@@ -18,7 +18,7 @@ Resume rule: continue from the first unchecked item below.
 - [x] **Phase 6 — Benchmark + Dashboard.** Metrics JSON/Markdown, Streamlit dashboard.
 - [x] **Phase 7 — Learning.** Demo recording, ACT training wrapper, evaluation, learned control.
 - [x] **Phase 8 — Real hardware path.** Real arm/camera HAL, ArUco generator, calibration script, docs.
-- [ ] **Phase 9 — Documentation.** README, architecture diagram, results.
+- [x] **Phase 9 — Documentation.** README, architecture diagram, results.
 
 ## Post-build steps
 
@@ -429,3 +429,35 @@ Resume rule: continue from the first unchecked item below.
   `docs/results.md` both say so plainly.
 - The HSV thresholds in `classes.yaml` are tuned for the simulator's rendering and
   will need retuning under real lighting. §4.4 of the hardware doc covers it.
+
+## Phase 9 — Documentation ✅
+
+**Delivered**
+
+- `README.md`: overview, what-it-does table, sim quickstart with real output,
+  Mermaid architecture diagram, measured benchmark tables, hardware summary
+  linking `docs/hardware_setup.md`, project structure, development commands,
+  roadmap with the spec's stretch goals, and a clearly marked demo-GIF placeholder.
+- `docs/architecture.md`: a full system flowchart, a sequence diagram of the sort
+  loop, a layer-contract table, and fifteen recorded design decisions (D1–D15).
+- `LICENSE`: MIT.
+
+**Design decisions**
+
+- *Every number in the README is real output*, pulled from
+  `outputs/benchmark.json` when the file was generated — not an estimate.
+- *The layer-contract table is the load-bearing piece of the architecture doc.*
+  The invariant that nothing above `hal/` imports a concrete backend is what makes
+  the sim and real paths interchangeable, so it is stated explicitly rather than
+  left implicit in a diagram.
+- *Design decisions are recorded with the problem that motivated them*, not just
+  the choice. Several (D6 parallax, D7 hue scoring, D15 tube geometry) exist
+  because a measurement came back wrong first.
+- *Mermaid diagrams are structurally validated* by a parser check on block
+  openers and `end` keywords, so a malformed diagram cannot ship silently.
+
+**Known issues**
+
+- The demo GIF is a placeholder. Recording one needs a display for
+  `sim-demo --gui`, which this build environment does not have. The README
+  documents the exact command to record it.
