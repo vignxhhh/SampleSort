@@ -266,7 +266,8 @@ class SortPipeline:
     def _body_side_probe(self, cap_xyz: np.ndarray, axis: np.ndarray) -> float | None:
         """Ask the overhead camera which end of the held tube is the body."""
         frame = self.backend.camera.read()
-        return body_side(frame, self.calibration, cap_xyz, axis, self.config.workspace.tube)
+        ws = self.config.workspace
+        return body_side(frame, self.calibration, cap_xyz, axis, ws.tube, ws.racks)
 
     def _next_to_right(self, fallen: list[FallenTube]) -> FallenTube | None:
         """The fallen tube to stand up next, or ``None`` if righting is not possible now."""

@@ -230,12 +230,10 @@ class SimWorld:
         ws = self.config.workspace
         tube = ws.tube
         for rack_cfg in ws.racks:
-            xs = [x for x, _ in rack_cfg.slots]
-            ys = [y for _, y in rack_cfg.slots]
-            pad = 0.030
-            half_x = (max(xs) - min(xs)) / 2.0 + pad
-            half_y = (max(ys) - min(ys)) / 2.0 + pad
-            center = ((max(xs) + min(xs)) / 2.0, (max(ys) + min(ys)) / 2.0)
+            x_min, x_max, y_min, y_max = rack_cfg.footprint
+            half_x = (x_max - x_min) / 2.0
+            half_y = (y_max - y_min) / 2.0
+            center = ((x_max + x_min) / 2.0, (y_max + y_min) / 2.0)
 
             plate_h = ws.rack_plate_height
             collision = client.createCollisionShape(

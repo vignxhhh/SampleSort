@@ -58,11 +58,24 @@ BodySideProbe = Callable[[np.ndarray, np.ndarray], "float | None"]
 #: joint limit; a hair inside it is the same pose for every practical purpose.
 _ROLL_HALF_TURN = math.pi - 1e-4
 
-#: Height the tube's base is released above the table when it is set upright.
-_RIGHTING_DROP_M = 0.003
+#: Commanded clearance under a lying tube when it is set back down. Like
+#: :data:`_STANDING_RELEASE_M` it allows for the ~6 mm the arm sags when
+#: carrying; at 3 mm the tube was pressed into the table and left tilted, its
+#: labelled end face showing, and the next look read it as standing.
+_RIGHTING_DROP_M = 0.010
+
+#: Commanded height of an upright tube's foot above the table at release. Larger
+#: than it looks: carrying a tube at the reach edge the arm sags ~6 mm below its
+#: commanded pose, and the gripped cap sits ~2 mm below the TCP, so this leaves
+#: ~3 mm of real clearance (measured). At 3 mm commanded, the foot met the table
+#: while still held and the tube was pushed over.
+_STANDING_RELEASE_M = 0.012
 
 #: How far the gripper backs away, along its own axis, after setting a tube down.
 _RIGHTING_RETREAT_M = 0.045
+
+#: Largest vertical step when lowering a held, hanging tube onto the station.
+_LOWERING_STEP_M = 0.01
 
 #: Slow-down while carrying a fallen tube. It is gripped by the cap, far from its
 #: centre of mass. At full speed the simulated grip lags and jolts the arm
@@ -186,11 +199,12 @@ class ScriptedController:
         grasp_z = ws.table_grasp_height
         place_z = ws.rack_grasp_height
         clearance = ws.approach_clearance
+        pick_clearance = self.pick_clearance(job)
 
         poses = [
-            ("pre_grasp", job.pick_pose(grasp_z + clearance)),
+            ("pre_grasp", job.pick_pose(grasp_z + pick_clearance)),
             ("grasp", job.pick_pose(grasp_z)),
-            ("lift", job.pick_pose(grasp_z + clearance)),
+            ("lift", job.pick_pose(grasp_z + pick_clearance)),
             ("pre_place", job.place_pose(place_z + clearance)),
             ("place", job.place_pose(place_z)),
             ("retreat", job.place_pose(place_z + clearance)),
@@ -203,6 +217,41 @@ class ScriptedController:
             via = Pose(*ws.pickup_zone.center, grasp_z + clearance)
             poses.insert(3, ("via", via))
         return poses
+
+    def pick_clearance(self, job: PickPlaceJob) -> float:
+        """How high above the grasp pose to approach and lift a tube.
+
+        Normally ``workspace.approach_clearance``. Near the edge of the reach the
+        arm can get down to a cap but not to the point straight above it — the
+        righting station is such a place, and a righted tube measured a few
+        millimetres further out than it stands was given up on in testing. There
+        the approach is lowered in 5 mm steps, but never below the cap height
+        plus 20 mm, until it can be reached. If the grasp itself is out of reach,
+        nothing is lowered and the job fails as unreachable.
+        """
+        ws = self.config.workspace
+        grasp_z = ws.table_grasp_height
+        try:
+            inverse_kinematics(self.config.arm, job.pick_pose(grasp_z))
+        except UnreachableError:
+            return ws.approach_clearance
+        floor = ws.tube.cap_height + 0.020
+        clearance = ws.approach_clearance
+        while clearance >= floor - 1e-9:
+            try:
+                inverse_kinematics(self.config.arm, job.pick_pose(grasp_z + clearance))
+            except UnreachableError:
+                clearance -= 0.005
+                continue
+            if clearance < ws.approach_clearance:
+                logger.info(
+                    "approaching %s from %.0f mm instead of %.0f mm to stay in reach",
+                    job.describe(),
+                    clearance * 1000,
+                    ws.approach_clearance * 1000,
+                )
+            return clearance
+        return ws.approach_clearance
 
     def solve_waypoints(self, job: PickPlaceJob) -> list[tuple[str, np.ndarray]]:
         """Solve the IK for every waypoint of a job.
@@ -450,8 +499,14 @@ class ScriptedController:
 
         # Level, the cap is beside the TCP, so the base hangs cap-half-height
         # plus the body length below it.
-        place_z = ws.table_height + tube.cap_height / 2.0 + tube.body_height + _RIGHTING_DROP_M
-        self._move_to(Pose(tx, ty, place_z, 0.0, roll), carrying=True)
+        place_z = ws.table_height + tube.cap_height / 2.0 + tube.body_height + _STANDING_RELEASE_M
+        # Lower in short Cartesian steps. One joint-space move from ``safe`` does
+        # not keep the wrist level on the way down, and the hanging tube's foot
+        # swung into the table and was set down at 30-60 degrees (measured: 9 of
+        # 15 single-tube trials ended with the tube lying down again).
+        steps = max(1, math.ceil((safe - place_z) / _LOWERING_STEP_M))
+        for z in np.linspace(safe, place_z, steps + 1)[1:]:
+            self._move_to(Pose(tx, ty, float(z), 0.0, roll), carrying=True)
         self.arm.open_gripper()
         self._settle()
 
@@ -530,7 +585,7 @@ class ScriptedController:
     def _unreachable_stage(self, job: PickPlaceJob) -> FailureReason:
         """Work out whether the pick side or the place side was out of reach."""
         ws = self.config.workspace
-        pick = job.pick_pose(ws.table_grasp_height + ws.approach_clearance)
+        pick = job.pick_pose(ws.table_grasp_height + self.pick_clearance(job))
         try:
             inverse_kinematics(self.config.arm, pick)
         except UnreachableError:

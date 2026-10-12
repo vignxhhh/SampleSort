@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -253,6 +253,17 @@ class RackConfig(_Base):
         if not value:
             raise ValueError("a rack must define at least one slot")
         return value
+
+    #: How far the rack's plate extends beyond its outermost slot centres.
+    PLATE_MARGIN_M: ClassVar[float] = 0.030
+
+    @property
+    def footprint(self) -> tuple[float, float, float, float]:
+        """The plate's ``(x_min, x_max, y_min, y_max)`` on the table."""
+        xs = [x for x, _ in self.slots]
+        ys = [y for _, y in self.slots]
+        m = self.PLATE_MARGIN_M
+        return (min(xs) - m, max(xs) + m, min(ys) - m, max(ys) + m)
 
     @property
     def num_slots(self) -> int:

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from samplesort.config import SampleSortConfig, load_config
+from samplesort.config import RackConfig, SampleSortConfig, load_config
 from samplesort.control.scripted import FailureReason, ScriptedController
 from samplesort.hal.factory import build_backend
 from samplesort.logging_db.sort_log import SortLog
@@ -19,6 +19,7 @@ from samplesort.pipeline import SortPipeline
 from samplesort.planning.kinematics import (
     TOP_DOWN_PITCH,
     Pose,
+    UnreachableError,
     inverse_kinematics,
     tool_rotation,
     top_down_roll_for_axis,
@@ -214,6 +215,23 @@ def test_a_coloured_cap_beside_the_tube_is_not_mistaken_for_its_body(
     assert body_side(frame, calibration, cap, axis, tube) == 1.0  # type: ignore[arg-type]
 
 
+def test_a_rack_beside_the_tube_is_not_mistaken_for_its_body(config: SampleSortConfig) -> None:
+    # Measured in sim: a tube inspected beside Rack A was stood on its cap,
+    # because the grey plate and its dark holes scored as body.
+    frame, calibration, cap, axis = _body_frame(config, -1.0)
+    rack = RackConfig(id="r", label="R", slots=[(0.17, 0.045), (0.21, 0.045)])
+    x0, x1, y0, y1 = rack.footprint
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    polygon = np.array([calibration.point_to_pixel(x, y, 0.0) for x, y in corners])  # type: ignore[attr-defined]
+    cv2.fillConvexPoly(frame, np.round(polygon).astype(np.int32), (158, 158, 160))
+    for x, y in rack.slots:
+        centre = tuple(int(round(c)) for c in calibration.point_to_pixel(x, y, 0.0))  # type: ignore[attr-defined]
+        cv2.circle(frame, centre, 13, (60, 60, 62), thickness=-1)
+    tube = config.workspace.tube
+    assert body_side(frame, calibration, cap, axis, tube) != -1.0  # type: ignore[arg-type]
+    assert body_side(frame, calibration, cap, axis, tube, [rack]) == -1.0  # type: ignore[arg-type]
+
+
 # ----------------------------------------------------------------- manoeuvre
 
 
@@ -292,6 +310,39 @@ def test_picks_from_the_station_route_via_the_pickup_zone(config: SampleSortConf
         place_xy=(0.295, -0.075),
     )
     assert "via" not in [name for name, _ in controller.waypoint_poses(ordinary)]
+
+
+def _job_at(xy: tuple[float, float]) -> PickPlaceJob:
+    return PickPlaceJob(
+        class_label="red", pick_xy=xy, rack_id="rack_a", slot_index=0, place_xy=(0.1, 0.2)
+    )
+
+
+def test_ordinary_picks_keep_the_full_approach_clearance(config: SampleSortConfig) -> None:
+    controller = ScriptedController(config, arm=None)  # type: ignore[arg-type]
+    assert controller.pick_clearance(_job_at((0.19, 0.0))) == config.workspace.approach_clearance
+
+
+def test_a_pick_at_the_reach_edge_approaches_lower(config: SampleSortConfig) -> None:
+    # Measured in a noisy run: a righted tube detected here was given up on,
+    # because the point 70 mm above it is out of reach though the cap is not.
+    controller = ScriptedController(config, arm=None)  # type: ignore[arg-type]
+    job = _job_at((0.2853, 0.1645))
+    ws = config.workspace
+    with pytest.raises(UnreachableError):
+        inverse_kinematics(config.arm, job.pick_pose(ws.table_grasp_height + ws.approach_clearance))
+    clearance = controller.pick_clearance(job)
+    assert ws.tube.cap_height + 0.02 <= clearance < ws.approach_clearance
+    assert controller.is_feasible(job)
+    poses = dict(controller.waypoint_poses(job))
+    assert poses["pre_grasp"].z == pytest.approx(ws.table_grasp_height + clearance)
+
+
+def test_an_unreachable_cap_is_still_reported_unreachable(config: SampleSortConfig) -> None:
+    controller = ScriptedController(config, arm=None)  # type: ignore[arg-type]
+    job = _job_at((0.40, 0.0))
+    assert controller.pick_clearance(job) == config.workspace.approach_clearance
+    assert not controller.is_feasible(job)
 
 
 # ----------------------------------------------------------------------- loop

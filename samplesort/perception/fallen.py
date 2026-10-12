@@ -16,6 +16,11 @@ Two things measured in sim shape the probe. The arm's own links sit between the
 camera and the inner part of the held body, so probing starts well out along it.
 And the tube twists a few degrees in the grip while it is carried, so each side
 is probed along a fan of directions and the best-matching one counts.
+
+Racks are grey and full of dark holes, which also look like tube body, and a
+tube that fell near the edge of the pickup zone is inspected right beside one
+(measured: a tube stood on its cap because a rack scored 1.0 against the real
+body's 0.5). So probe points that land on a known rack are skipped, not counted.
 """
 
 from __future__ import annotations
@@ -23,7 +28,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from samplesort.config import TubeConfig
+from samplesort.config import RackConfig, TubeConfig
 from samplesort.perception.calibration import Calibration
 
 #: Pixels more saturated than this are a cap (or something else coloured), not a body.
@@ -45,6 +50,7 @@ def body_side_scores(
     cap_xyz: np.ndarray,
     axis: np.ndarray,
     tube: TubeConfig,
+    racks: list[RackConfig] | None = None,
 ) -> tuple[float, float]:
     """Score how body-like each side of a held cap looks.
 
@@ -54,6 +60,7 @@ def body_side_scores(
         cap_xyz: Position of the held cap's centre (the tool centre point).
         axis: Horizontal unit vector along the tube's axis.
         tube: Tube dimensions.
+        racks: Racks whose footprints are ignored, seen from above.
 
     Returns:
         ``(score_along_axis, score_against_axis)``: the fraction of probe points
@@ -63,6 +70,7 @@ def body_side_scores(
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).astype(float)
     table = float(np.median(gray))
     body_like = (hsv[:, :, 1] < _MAX_BODY_SATURATION) & (np.abs(gray - table) > _MIN_TABLE_CONTRAST)
+    ignore = rack_mask(body_like.shape, calibration, racks or [])
 
     nominal = np.asarray(axis, dtype=float)[:2]
     nominal = nominal / max(float(np.linalg.norm(nominal)), 1e-9)
@@ -87,7 +95,7 @@ def body_side_scores(
                     point = cap_xyz[:2] + direction * sign * along + across * offset
                     u, v = calibration.point_to_pixel(float(point[0]), float(point[1]), height)
                     col, row = int(round(u)), int(round(v))
-                    if 0 <= row < rows and 0 <= col < cols:
+                    if 0 <= row < rows and 0 <= col < cols and not ignore[row, col]:
                         hits += bool(body_like[row, col])
                         total += 1
             if total:
@@ -96,12 +104,26 @@ def body_side_scores(
     return (scores[0], scores[1])
 
 
+def rack_mask(
+    shape: tuple[int, ...], calibration: Calibration, racks: list[RackConfig]
+) -> np.ndarray:
+    """Pixels covered by any rack's plate, projected at table height."""
+    mask = np.zeros(shape[:2], dtype=np.uint8)
+    for rack in racks:
+        x_min, x_max, y_min, y_max = rack.footprint
+        corners = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
+        pixels = [calibration.point_to_pixel(x, y, 0.0) for x, y in corners]
+        cv2.fillConvexPoly(mask, np.round(np.array(pixels)).astype(np.int32), (1,))
+    return mask.astype(bool)
+
+
 def body_side(
     frame: np.ndarray,
     calibration: Calibration,
     cap_xyz: np.ndarray,
     axis: np.ndarray,
     tube: TubeConfig,
+    racks: list[RackConfig] | None = None,
 ) -> float | None:
     """Which way along ``axis`` the held tube's body extends.
 
@@ -109,7 +131,7 @@ def body_side(
         ``+1.0`` if the body lies along ``axis``, ``-1.0`` if against it, or
         ``None`` when the two sides are too close to call.
     """
-    along, against = body_side_scores(frame, calibration, cap_xyz, axis, tube)
+    along, against = body_side_scores(frame, calibration, cap_xyz, axis, tube, racks)
     if abs(along - against) < MIN_SIDE_MARGIN:
         return None
     return 1.0 if along > against else -1.0
