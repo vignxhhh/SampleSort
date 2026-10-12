@@ -6,6 +6,7 @@ mixed colours into the correct racks, with every attempt written to the log.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 
 import pytest
@@ -192,6 +193,38 @@ def test_retries_are_bounded_by_the_config(config: SampleSortConfig, sort_log: S
     expected_per_job = 1 + config.pipeline.grasp_retries
     assert controller.calls == report.attempted * expected_per_job
     assert all(outcome.attempts == expected_per_job for outcome in report.outcomes)
+
+
+class MissOnceController(ScriptedController):
+    """Misses the first attempt of every job, then runs it for real."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Record every position the controller is asked to pick from."""
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self.picks: list[tuple[float, float]] = []
+
+    def execute(self, job: PickPlaceJob) -> ExecutionResult:
+        """Report a miss on the first call for each tube, then really execute."""
+        self.picks.append(job.pick_xy)
+        if len(self.picks) % 2 == 1:
+            return ExecutionResult(success=False, reason=FailureReason.GRASP_MISSED)
+        return super().execute(job)
+
+
+def test_a_retry_uses_a_fresh_measurement(config: SampleSortConfig, sort_log: SortLog) -> None:
+    # Retrying at the same noisy position repeated the same miss every time.
+    config.pipeline.perception_noise_m = 0.004
+    backend = build_backend(config, gui=False, seed=config.seed)
+    with backend:
+        assert backend.world is not None
+        backend.world.spawn_tubes(1)
+        controller = MissOnceController(config, backend.arm, backend.world)
+        pipeline = SortPipeline(config, backend, sort_log=sort_log, controller=controller)
+        report = pipeline.run()
+    first, second = controller.picks[:2]
+    assert first != second
+    assert math.dist(first, second) < 2 * config.arm.gripper.grasp_tolerance_xy
+    assert report.succeeded == 1 and report.outcomes[0].attempts == 2
 
 
 # --------------------------------------------------------------------- dry run

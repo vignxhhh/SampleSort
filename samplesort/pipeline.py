@@ -432,10 +432,32 @@ class SortPipeline:
             and result.reason in (FailureReason.GRASP_MISSED, FailureReason.DROPPED_IN_TRANSIT)
         ):
             logger.info("retrying %s after %s", job.describe(), result.reason.value)
+            job = self._remeasure(job)
             result = self.controller.execute(job)
             attempts += 1
 
         return JobOutcome(job=job, result=result, attempts=attempts)
+
+    def _remeasure(self, job: PickPlaceJob) -> PickPlaceJob:
+        """Look at the tube again before retrying a missed grasp.
+
+        Retrying at the same position repeats the same miss whenever the cause
+        was a bad measurement: in noisy runs every miss was followed by a second
+        one. A fresh look gives the retry a new measurement; if the tube can no
+        longer be seen standing near where it was (knocked over, say), the
+        original position is kept.
+        """
+        reach = 2.0 * self.config.arm.gripper.grasp_tolerance_xy
+        candidates = [
+            d
+            for d in self.perceive_scene().upright
+            if d.class_label == job.class_label and math.dist(d.table_xy, job.pick_xy) <= reach
+        ]
+        if not candidates:
+            return job
+        nearest = min(candidates, key=lambda d: math.dist(d.table_xy, job.pick_xy))
+        x, y = nearest.table_xy
+        return replace(job, pick_xy=(float(x), float(y)))
 
     # --------------------------------------------------------------------- run
 
