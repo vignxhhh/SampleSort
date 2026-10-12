@@ -1,0 +1,382 @@
+{
+  "conditions": [
+    "nominal",
+    "bright",
+    "dim",
+    "warm",
+    "cool",
+    "low_sun",
+    "vignette",
+    "very_dim",
+    "noisy_dark",
+    "magenta_cast",
+    "raking_warm"
+  ],
+  "held_out": [
+    "very_dim",
+    "noisy_dark",
+    "magenta_cast",
+    "raking_warm"
+  ],
+  "test_scenes": 40,
+  "train_frames": 900,
+  "train_seconds": 792.0,
+  "loss_history": [
+    4.418,
+    1.8678,
+    0.7284,
+    0.3605,
+    0.244,
+    0.1966,
+    0.1535,
+    0.1162,
+    0.1013,
+    0.0802,
+    0.0738,
+    0.0619,
+    0.0516,
+    0.0481,
+    0.0462,
+    0.0413,
+    0.0357,
+    0.0299,
+    0.0289,
+    0.025,
+    0.0236,
+    0.0209,
+    0.0198,
+    0.0193
+  ],
+  "scores": {
+    "hsv": {
+      "nominal": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "bright": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "dim": {
+        "targets": 198,
+        "detections": 150,
+        "found": 150,
+        "correct_class": 150,
+        "recall": 0.7575757575757576,
+        "precision": 1.0,
+        "sortable": 0.7575757575757576
+      },
+      "warm": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "cool": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "low_sun": {
+        "targets": 198,
+        "detections": 98,
+        "found": 97,
+        "correct_class": 97,
+        "recall": 0.4898989898989899,
+        "precision": 0.9897959183673469,
+        "sortable": 0.4898989898989899
+      },
+      "vignette": {
+        "targets": 198,
+        "detections": 153,
+        "found": 150,
+        "correct_class": 150,
+        "recall": 0.7575757575757576,
+        "precision": 0.9803921568627451,
+        "sortable": 0.7575757575757576
+      },
+      "very_dim": {
+        "targets": 198,
+        "detections": 3,
+        "found": 0,
+        "correct_class": 0,
+        "recall": 0.0,
+        "precision": 0.0,
+        "sortable": 0.0
+      },
+      "noisy_dark": {
+        "targets": 198,
+        "detections": 43,
+        "found": 43,
+        "correct_class": 43,
+        "recall": 0.21717171717171718,
+        "precision": 1.0,
+        "sortable": 0.21717171717171718
+      },
+      "magenta_cast": {
+        "targets": 198,
+        "detections": 105,
+        "found": 105,
+        "correct_class": 105,
+        "recall": 0.5303030303030303,
+        "precision": 1.0,
+        "sortable": 0.5303030303030303
+      },
+      "raking_warm": {
+        "targets": 198,
+        "detections": 5,
+        "found": 0,
+        "correct_class": 0,
+        "recall": 0.0,
+        "precision": 0.0,
+        "sortable": 0.0
+      },
+      "overall": {
+        "targets": 2178,
+        "detections": 1350,
+        "found": 1337,
+        "correct_class": 1337,
+        "recall": 0.6138659320477502,
+        "precision": 0.9903703703703703,
+        "sortable": 0.6138659320477502
+      }
+    },
+    "hsv_gray_world": {
+      "nominal": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "bright": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "dim": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "warm": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "cool": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "low_sun": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "vignette": {
+        "targets": 198,
+        "detections": 198,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 1.0,
+        "sortable": 1.0
+      },
+      "very_dim": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "noisy_dark": {
+        "targets": 198,
+        "detections": 193,
+        "found": 192,
+        "correct_class": 192,
+        "recall": 0.9696969696969697,
+        "precision": 0.9948186528497409,
+        "sortable": 0.9696969696969697
+      },
+      "magenta_cast": {
+        "targets": 198,
+        "detections": 199,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.9949748743718593,
+        "sortable": 1.0
+      },
+      "raking_warm": {
+        "targets": 198,
+        "detections": 169,
+        "found": 169,
+        "correct_class": 169,
+        "recall": 0.8535353535353535,
+        "precision": 1.0,
+        "sortable": 0.8535353535353535
+      },
+      "overall": {
+        "targets": 2178,
+        "detections": 2149,
+        "found": 2143,
+        "correct_class": 2143,
+        "recall": 0.9839302112029384,
+        "precision": 0.9972080037226617,
+        "sortable": 0.9839302112029384
+      }
+    },
+    "learned": {
+      "nominal": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "bright": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "dim": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "warm": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "cool": {
+        "targets": 198,
+        "detections": 199,
+        "found": 197,
+        "correct_class": 197,
+        "recall": 0.9949494949494949,
+        "precision": 0.9899497487437185,
+        "sortable": 0.9949494949494949
+      },
+      "low_sun": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "vignette": {
+        "targets": 198,
+        "detections": 200,
+        "found": 198,
+        "correct_class": 198,
+        "recall": 1.0,
+        "precision": 0.99,
+        "sortable": 1.0
+      },
+      "very_dim": {
+        "targets": 198,
+        "detections": 199,
+        "found": 197,
+        "correct_class": 197,
+        "recall": 0.9949494949494949,
+        "precision": 0.9899497487437185,
+        "sortable": 0.9949494949494949
+      },
+      "noisy_dark": {
+        "targets": 198,
+        "detections": 199,
+        "found": 197,
+        "correct_class": 197,
+        "recall": 0.9949494949494949,
+        "precision": 0.9899497487437185,
+        "sortable": 0.9949494949494949
+      },
+      "magenta_cast": {
+        "targets": 198,
+        "detections": 192,
+        "found": 190,
+        "correct_class": 174,
+        "recall": 0.9595959595959596,
+        "precision": 0.9895833333333334,
+        "sortable": 0.8787878787878788
+      },
+      "raking_warm": {
+        "targets": 198,
+        "detections": 199,
+        "found": 197,
+        "correct_class": 197,
+        "recall": 0.9949494949494949,
+        "precision": 0.9899497487437185,
+        "sortable": 0.9949494949494949
+      },
+      "overall": {
+        "targets": 2178,
+        "detections": 2188,
+        "found": 2166,
+        "correct_class": 2150,
+        "recall": 0.9944903581267218,
+        "precision": 0.9899451553930531,
+        "sortable": 0.9871441689623508
+      }
+    }
+  }
+}

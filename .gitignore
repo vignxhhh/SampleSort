@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# SampleSort runtime artefacts
+outputs/
+datasets/
+checkpoints/
+*.db
+*.sqlite
+*.sqlite3
+wandb/
+
+# Generated at runtime from arm_so101.yaml on every sim connect
+samplesort/sim/assets/*_generated.urdf
+
+# Generated calibration data
+configs/camera_intrinsics.yaml
+configs/homography.npz
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,10 @@
+{
+ "overhead": "What the overhead camera sees, with the detector's output: every cap found, classified by colour and located on the bench to about a millimetre.",
+ "overview": "The cell before a run: eight capped tubes in the pickup zone, three racks, the arm folded back so the overhead camera has a clear view.",
+ "grasp": "The gripper closing on a cap. The wrist camera read this tube's QR label a moment earlier, from 7 cm above it.",
+ "carry": "Carrying a tube to its rack. Each move is a waypoint solved exactly by closed-form inverse kinematics.",
+ "sorted": "The same bench after the run: every tube in the rack its cap colour belongs to, and one row per tube in the sort log.",
+ "fallen": "A harder start: two tubes knocked over. The overhead camera tells them apart from standing ones by the outline of the cap.",
+ "inspect": "A fallen tube held level over clear table, so the overhead camera can see which end is the body before it is stood up.",
+ "righted": "Stood back up at the righting station, cap on top. From here it is sorted like any other tube."
+}
