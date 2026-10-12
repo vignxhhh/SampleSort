@@ -2,7 +2,8 @@
    then check the resulting tool position against the analytic forward
    kinematics Python exported for every frame. */
 import { readFileSync } from "node:fs";
-const D = JSON.parse(readFileSync(new URL("./data/run.json", import.meta.url), "utf8"));
+const file = process.argv[2] || "./data/run.json";  // e.g. ./data/run_recovery.json
+const D = JSON.parse(readFileSync(new URL(file, import.meta.url), "utf8"));
 const [l1, l2, l3] = D.arm.links, h0 = D.arm.base_height;
 
 const I = () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];

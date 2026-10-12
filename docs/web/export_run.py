@@ -3,10 +3,21 @@
 Nothing here is re-authored for the browser: the joint angles are what the
 controller commanded, the tube poses are what the physics solver produced, and
 `tcp` is the analytic forward-kinematics result the page checks itself against.
+
+Two scenarios are exported:
+
+* ``nominal`` (``data/run.json``) — eight upright tubes, clean perception.
+* ``recovery`` (``data/run_recovery.json``) — localisation noise injected so
+  grasps can miss and be retried, and tubes knocked over so the arm has to
+  stand them back up before sorting them.
+
+Run from the repository root: ``python docs/web/export_run.py [nominal|recovery]``.
 """
 
 import json
+import math
 import pathlib
+import sys
 
 from samplesort.config import load_config
 from samplesort.hal.factory import build_backend
@@ -17,15 +28,27 @@ from samplesort.planning.kinematics import forward_kinematics
 from samplesort.planning.task_planner import PickPlaceJob
 from samplesort.sim.world import SimWorld
 
-OUT = str(pathlib.Path(__file__).resolve().parent / "data" / "run.json")
 EVERY = 20  # physics steps between samples (240 Hz -> 12 Hz)
 
+SCENARIOS = {
+    # seed, tubes, tubes knocked over, localisation noise (m)
+    "nominal": {"seed": 42, "tubes": 8, "knocked": 0, "noise": 0.0, "out": "run.json"},
+    "recovery": {"seed": 3, "tubes": 6, "knocked": 2, "noise": 0.006, "out": "run_recovery.json"},
+}
+scenario_name = sys.argv[1] if len(sys.argv) > 1 else "nominal"
+scenario = SCENARIOS[scenario_name]
+if len(sys.argv) > 2:  # seed override, for searching
+    scenario["seed"] = int(sys.argv[2])
+OUT = str(pathlib.Path(__file__).resolve().parent / "data" / scenario["out"])
+
 cfg = load_config()
-backend = build_backend(cfg, gui=False, seed=42)
+cfg.seed = scenario["seed"]
+cfg.pipeline.perception_noise_m = scenario["noise"]
+backend = build_backend(cfg, gui=False, seed=scenario["seed"])
 
 frames, events = [], []
 counter = {"n": 0}
-state = {"arm": None, "world": None}
+state = {"arm": None, "world": None, "order": []}
 
 
 def sample() -> None:
@@ -37,9 +60,15 @@ def sample() -> None:
     fingers = world.bullet.getJointStates(world.arm_id, world.finger_indices)
     travel = float(fingers[0][0])
     span = (cfg.arm.gripper.open_width - cfg.arm.gripper.closed_width) / 2.0
+    # One entry per spawned tube, in spawn order; null once a tube the pipeline
+    # gave up on has been retired from the scene.
+    present = {t.body_id for t in world.tubes}
     tubes = []
-    for t in world.tubes:
-        p, o = world.bullet.getBasePositionAndOrientation(t.body_id)
+    for body_id in state["order"]:
+        if body_id not in present:
+            tubes.append(None)
+            continue
+        p, o = world.bullet.getBasePositionAndOrientation(body_id)
         tubes.append([round(float(v), 5) for v in p] + [round(float(v), 4) for v in o])
     tcp = forward_kinematics(cfg.arm, q)
     frames.append(
@@ -71,9 +100,13 @@ with backend, SortLog(":memory:") as log:
     world = backend.world
     state["world"], state["arm"] = world, backend.arm
     backend.arm.move_to_joints(cfg.arm.observe_position, 0.8)
-    tubes = world.spawn_tubes(8)
+    tubes = world.spawn_tubes(scenario["tubes"])
+    for i, tube in enumerate(tubes[: scenario["knocked"]]):
+        world.knock_over(tube.body_id, math.radians(37 + 111 * i + 13 * scenario["seed"]))
     order = [t.body_id for t in world.tubes]
+    state["order"] = order
     labels = {t.body_id: t.label for t in world.tubes}
+    sample_ids = {t.body_id: t.sample_id for t in world.tubes}
 
     for _ in range(3):
         sample()
@@ -84,21 +117,58 @@ with backend, SortLog(":memory:") as log:
     dets = pipeline.detector.detect_in_pickup_zone(frame_bgr)
     cal = calibration_from_camera_pose(cfg.camera, cfg.workspace, backend.camera.world_to_pixel)
 
-    original_exec = pipeline._execute_with_retry
+    controller = pipeline.controller
+    original_exec = controller.execute
+    original_right = controller.right_tube
 
-    def tracked(job: PickPlaceJob) -> bool:
-        """Note the frame each job starts on, then run it unchanged."""
+    def tracked(job: PickPlaceJob):  # noqa: ANN202 - mirrors execute()
+        """Note the frames each attempt spans and how it ended, then run it unchanged."""
+        start = len(frames)
+        result = original_exec(job)
+        # A retry re-measures the tube, so it is a new job object: count the
+        # failed attempts on the same tube that came straight before it.
+        attempt = 1
+        for previous in reversed(events):
+            if previous["kind"] != "pick" or previous["body"] != job.body_id or previous["ok"]:
+                break
+            attempt += 1
         events.append(
             {
-                "f": len(frames),
+                "f": start,
+                "end": len(frames),
+                "kind": "pick",
+                "attempt": attempt,
                 "label": job.class_label,
                 "rack": job.rack_id,
                 "slot": job.slot_index,
+                "ok": result.success,
+                "reason": result.reason.value,
+                "id": result.sample_id,
+                "body": job.body_id,
             }
         )
-        return original_exec(job)
+        return result
 
-    pipeline._execute_with_retry = tracked
+    def tracked_right(fallen, probe):  # noqa: ANN001, ANN202 - mirrors right_tube()
+        """Note the frames a righting manoeuvre spans and how it ended."""
+        start = len(frames)
+        result = original_right(fallen, probe)
+        events.append(
+            {
+                "f": start,
+                "end": len(frames),
+                "kind": "right",
+                "label": fallen.class_label,
+                "ok": result.success,
+                "reason": result.reason.value,
+                "side": result.body_side,
+                "xy": [round(v, 4) for v in fallen.table_xy],
+            }
+        )
+        return result
+
+    controller.execute = tracked
+    controller.right_tube = tracked_right
 
     report = pipeline.run()
     for _ in range(14):
@@ -109,7 +179,12 @@ SimWorld.step = original_step
 ws, arm, grip = cfg.workspace, cfg.arm, cfg.arm.gripper
 payload = {
     "meta": {
+        "scenario": scenario_name,
         "seed": cfg.seed,
+        "noise_mm": round(scenario["noise"] * 1000, 1),
+        "knocked": scenario["knocked"],
+        "righted": report.righted,
+        "retries": sum(o.attempts - 1 for o in report.outcomes),
         "fps": 240 / EVERY,
         "frames": len(frames),
         "sorted": report.succeeded,
@@ -149,6 +224,7 @@ payload = {
         "grasp_h": ws.grasp_height,
         "clear": ws.approach_clearance,
         "plate_h": ws.rack_plate_height,
+        "station": list(ws.righting_station) if ws.righting_station else None,
         "racks": [
             {"id": r.id, "label": r.label, "slots": [list(s) for s in r.slots]} for r in ws.racks
         ],
@@ -164,7 +240,7 @@ payload = {
         }
         for c in cfg.classes.classes
     ],
-    "tubes": [{"id": bid, "label": labels[bid]} for bid in order],
+    "tubes": [{"id": bid, "label": labels[bid], "sid": sample_ids[bid]} for bid in order],
     "events": events,
     "frames": frames,
     "detections": [
@@ -196,4 +272,14 @@ print(
     report.succeeded,
     "/",
     report.attempted,
+    "| retries:",
+    payload["meta"]["retries"],
+    "| righted:",
+    report.righted,
+    "/",
+    scenario["knocked"],
+    "| left on table:",
+    len(report.fallen_left),
+    "| failures:",
+    [(e["kind"], e["reason"]) for e in events if not e["ok"]],
 )

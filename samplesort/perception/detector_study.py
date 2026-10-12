@@ -534,14 +534,17 @@ def run_study(
     return result
 
 
-def contact_sheet(config: SampleSortConfig, seed: int = TEST_SEED_BASE) -> np.ndarray:
-    """One test layout under every condition, tiled with labels, for the docs."""
+def contact_sheet(
+    config: SampleSortConfig, seed: int = TEST_SEED_BASE, *, labels: bool = True
+) -> np.ndarray:
+    """One test layout under every condition, tiled (optionally labelled), for the docs."""
     tiles: list[np.ndarray] = []
     for scene in render_scenes(config, [seed], lambda _s, _r: dict(CONDITIONS)):
         for name, frame in scene.frames.items():
             tile = cv2.resize(frame, None, fx=INPUT_SCALE, fy=INPUT_SCALE)
-            cv2.putText(tile, name, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3)
-            cv2.putText(tile, name, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            if labels:
+                cv2.putText(tile, name, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3)
+                cv2.putText(tile, name, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
             tiles.append(tile)
     while len(tiles) % 4:
         tiles.append(np.full_like(tiles[0], 255))

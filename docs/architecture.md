@@ -262,3 +262,67 @@ base passed *below* the tops of tubes still standing on the table, knocking them
 over in transit — two grasp misses per 8-tube run. Rather than raise the grasp
 tolerance to mask it, the geometry was fixed: 40 + 12 mm tubes, 46 mm grasp
 height, 70 mm approach clearance, giving 18 mm of clearance over a standing tube.
+
+### D16 — Sample IDs come from a wrist camera, not the overhead one
+
+An 8.5 mm QR label — the largest that fits a 9.5 mm-radius cap and still lets
+the cap's colour show around it — is a few pixels wide from the overhead camera
+and never decoded there. A wrist camera at the pre-grasp pose, 7 cm above the
+cap, sees it at ~25 px per module. The scanner decodes the code nearest the
+image centre (neighbours can be in view) and falls back from OpenCV's classic
+QR detector to the ArUco-based one and then to a lightly blurred frame, which
+read 80/80 small rotated codes in testing where the classic detector alone
+missed some. A failed read is logged
+as "no ID", never guessed.
+
+### D17 — Fallen tubes are righted at a dedicated station
+
+Standing tubes are sorted first, so the gripper has room. A fallen tube is
+gripped by its cap from above, at its own axis angle, and carried to a fixed
+righting station chosen (by a search over 52 candidates) to be inside the
+camera view, reachable level, and clear of every rack. Which end is the body is
+decided only there, with the tube held level over clear table: judged where it
+fell, neighbouring caps and racks gave the wrong answer in 95% of a measured
+sweep of cluttered layouts.
+
+### D18 — The lighting study includes a normalisation-only arm
+
+Comparing only "HSV" with "learned" would have credited the learned detector
+with a gain that a one-line gray-world correction delivers on its own (61% →
+98% vs 99%). The study therefore runs the HSV detector on the same normalised
+frames the network sees, and holds four lighting conditions out of training so
+it measures generalisation, not just interpolation.
+
+### D19 — The righting manoeuvre is checked against perturbation, not one seed
+
+The first version passed its tests and a 17-tube end-to-end run, then failed
+CI when a newer OpenCV moved a detected position by ~1e-9 m. Measured properly
+— single tubes, many seeds, sub-millimetre perturbations — it stood only 6 of
+15 tubes up. Three causes: the tube was lowered in one joint-space move that
+does not keep the wrist level, so its foot swung into the table; the arm sags
+~6 mm under the slow carry and the cap sits ~2 mm below the TCP, so the
+commanded 3 mm release height was really −6 mm; and the body-side probe scored
+a grey, holed rack plate as tube body. The fixes are Cartesian lowering in
+10 mm steps, release heights set from the measured sag, and masking racks out
+of the probe. The acceptance measure is now "never silently wrong": 55/60
+first-attempt successes, the rest reported and retried.
+
+### D20 — The pipeline remembers where it put tubes down
+
+A tube the arm sets back down lying, because it could not tell which end was
+the body, can show a nearly round cap from some angles and be read as
+standing. Making the detector call such caps fallen (oval outline plus a body
+beside it) cost 7–17 points of recall under low sun and vignetting, where
+shadows look like bodies. Instead the pipeline remembers where it left the tube
+and treats a detection there as fallen. Robots know where they put things; the
+detector does not need to rediscover it.
+
+### D21 — A retry starts with a fresh look
+
+A missed grasp used to be retried at the same position, and when the miss came
+from a bad measurement the retry missed in exactly the same way: in noisy runs
+misses always came in pairs. The pipeline now re-perceives before retrying and
+picks from the nearest standing tube of the same class within twice the grasp
+tolerance. Under injected random noise this raised completion at 10 mm from
+86.7% to 96.7%. Systematic error such as a calibration bias is not averaged away
+by looking twice, so the gain on real hardware will be smaller.

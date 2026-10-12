@@ -715,3 +715,52 @@ proving the whole `SimWorld` still connects and spawns tubes that way.
 - README, `docs/results.md` and the test counts refreshed against the final run.
 
 **Final state: 291 tests passing, ruff clean, mypy clean on 3.10 and 3.11, CI green.**
+
+---
+
+## Beyond the spec — stretch goals and what testing them uncovered ✅
+
+**Sample IDs (QR).** Caps carry 8.5 mm QR labels in sim (textured, double-sided
+quads lifted 1.2 mm to avoid depth fighting). A wrist camera reads them from the
+pre-grasp pose; the overhead camera cannot. 24/24 IDs read across three 8-tube
+runs, each matching the tube actually picked. `sample_id` reaches the sort log.
+
+**Standing knocked-over tubes back up.** Fallen tubes are told apart by their
+cap outline, picked by the cap, carried to a righting station, checked for which
+end is the body with the tube held level over clear table, then stood up.
+
+**Lighting study and a learned detector.** `samplesort detector-study` renders
+scenes under randomised and named lighting (four conditions held out), trains a
+55k-parameter CNN on CPU, and compares it with HSV and with HSV on gray-world-
+corrected frames. HSV 61% → HSV + gray-world 98% → CNN 99%. The honest read:
+normalisation does nearly all the work.
+
+**What the new work exposed — all fixed, each with a regression test:**
+
+- *Righting was fragile.* CI failed when OpenCV 5.0 moved a detected position by
+  ~1e-9 m. Measured over many seeds and perturbations it stood up only 6/15
+  tubes: a joint-space lowering move swung the tube's foot into the table, the
+  arm's ~6 mm sag under load made the release height negative, and rack plates
+  read as tube body. Now 55/60 first time, the rest reported and retried, zero
+  silently wrong, on both OpenCV versions.
+- *A tube set back down lying was retried forever as a standing tube,* and the
+  retirement fallback could not find it (it matched the tube's base, 4 cm from
+  its cap). The pipeline now remembers where it put tubes down; retirement
+  matches caps too. A detector-side fix was tried first and reverted: the
+  lighting study showed it cost up to 17 points of recall under shadows.
+- *Picks near the reach edge* could fail although the cap was reachable — only
+  the 70 mm approach point above it was not. The approach is lowered when needed.
+- *The noise benchmark was not measuring what it claimed.* Every trial drew the
+  same noise sequence (seeded from the shared config), so changing only the seed
+  moved grasp success at 20 mm between 5% and 54%. Noise is now seeded per trial
+  and the sweep re-run with 20 trials per level.
+- *Retries repeated the same mistake.* A missed grasp was retried at the same
+  badly measured position. The pipeline now looks again first; at 10 mm of noise
+  completion rose from 86.7% to 96.7%, at 20 mm from 47.5% to 65.8%.
+
+**Web console.** `docs/web/` now replays two runs (clean, and a recovery run with
+injected noise and knocked-over tubes), shows the event log with sample IDs and
+failures, the lighting study, and an in-browser HSV lab.
+
+**State: 365 tests passing (with the learning extra; CI without it skips the
+torch-only ones), on OpenCV 4.11 and 5.0; ruff and mypy clean.**
