@@ -17,6 +17,7 @@ import numpy as np
 from samplesort.config import SampleSortConfig
 from samplesort.sim._bullet import bc, pb, quiet_stdout
 from samplesort.sim.assets.arm_builder import write_arm_urdf
+from samplesort.sim.assets.labels import LABEL_LIFT_M, write_label_assets
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class TubeState:
     placed_rack: str | None = None
     #: Slot index within :attr:`placed_rack`, or ``None`` while unsorted.
     placed_slot: int | None = None
+    #: ID printed on the cap's QR label, or ``None`` when labels are disabled.
+    sample_id: str | None = None
 
     @property
     def is_sorted(self) -> bool:
@@ -87,6 +90,7 @@ class SimWorld:
         self.table_id: int = -1
         self.tubes: list[TubeState] = []
         self.racks: list[RackBodies] = []
+        self._sample_counter = 0
 
         self.joint_indices: list[int] = []
         self.finger_indices: list[int] = []
@@ -133,6 +137,7 @@ class SimWorld:
         self._connected = False
         self.tubes = []
         self.racks = []
+        self._sample_counter = 0
 
     @property
     def is_connected(self) -> bool:
@@ -287,8 +292,9 @@ class SimWorld:
         positions = self._sample_positions(count)
         created: list[TubeState] = []
         for label, (x, y) in zip(chosen, positions, strict=True):
-            body_id = self._create_tube_body(x, y, label)
-            state = TubeState(body_id=body_id, label=label, spawn_xy=(x, y))
+            sample_id = self._next_sample_id()
+            body_id = self._create_tube_body(x, y, label, sample_id=sample_id)
+            state = TubeState(body_id=body_id, label=label, spawn_xy=(x, y), sample_id=sample_id)
             self.tubes.append(state)
             created.append(state)
             logger.debug("spawned %s tube %d at (%.3f, %.3f)", label, body_id, x, y)
@@ -373,8 +379,26 @@ class SimWorld:
         rows = max(1, int(usable_h // tube.min_separation))
         return cols * rows
 
-    def _create_tube_body(self, x: float, y: float, label: str) -> int:
-        """Create one tube: a translucent body cylinder with a coloured cap on top."""
+    def _next_sample_id(self) -> str | None:
+        """The ID for the next spawned tube, or ``None`` when QR labels are off."""
+        classes = self.config.classes
+        if not classes.qr_enabled:
+            return None
+        self._sample_counter += 1
+        return f"{classes.sample_id_prefix}-{self._sample_counter:04d}"
+
+    def _create_tube_body(
+        self, x: float, y: float, label: str, *, sample_id: str | None = None
+    ) -> int:
+        """Create one tube: a translucent body, a coloured cap and an optional QR label.
+
+        Args:
+            x: Spawn position on the table.
+            y: Spawn position on the table.
+            label: The tube's class, which sets the cap colour.
+            sample_id: When given, a printed QR label encoding it is added on top
+                of the cap as a visual-only link.
+        """
         client = self.bullet
         ws = self.config.workspace
         t = ws.tube
@@ -396,6 +420,27 @@ class SimWorld:
             pb.GEOM_CYLINDER, radius=t.cap_radius, length=t.cap_height, rgbaColor=list(rgba)
         )
 
+        # Link 0 is the cap. Link 1, when present, is the printed label: a
+        # visual-only quad with no collision shape, so it cannot change the grasp.
+        masses = [t.mass * 0.2]
+        collisions = [cap_col]
+        visuals = [cap_vis]
+        positions = [[0.0, 0.0, (t.body_height + t.cap_height) / 2.0]]
+        parents = [0]
+        texture_path: Path | None = None
+        if sample_id is not None:
+            mesh_path, texture_path = write_label_assets(sample_id)
+            side = t.label_side
+            label_vis = client.createVisualShape(
+                pb.GEOM_MESH, fileName=str(mesh_path), meshScale=[side, side, 1.0]
+            )
+            masses.append(1e-4)
+            collisions.append(-1)
+            visuals.append(label_vis)
+            positions.append([0.0, 0.0, t.cap_height / 2.0 + LABEL_LIFT_M])
+            parents.append(1)
+
+        count = len(masses)
         body_id: int = client.createMultiBody(
             baseMass=t.mass,
             baseCollisionShapeIndex=body_col,
@@ -404,19 +449,24 @@ class SimWorld:
             # Sink the centre of mass towards the base so the tube stands upright,
             # which is how a real tube sits in a weighted holder.
             baseInertialFramePosition=[0.0, 0.0, -t.body_height * 0.35],
-            linkMasses=[t.mass * 0.2],
-            linkCollisionShapeIndices=[cap_col],
-            linkVisualShapeIndices=[cap_vis],
-            linkPositions=[[0.0, 0.0, (t.body_height + t.cap_height) / 2.0]],
-            linkOrientations=[[0.0, 0.0, 0.0, 1.0]],
-            linkInertialFramePositions=[[0.0, 0.0, 0.0]],
-            linkInertialFrameOrientations=[[0.0, 0.0, 0.0, 1.0]],
-            linkParentIndices=[0],
-            linkJointTypes=[pb.JOINT_FIXED],
-            linkJointAxis=[[0.0, 0.0, 1.0]],
+            linkMasses=masses,
+            linkCollisionShapeIndices=collisions,
+            linkVisualShapeIndices=visuals,
+            linkPositions=positions,
+            linkOrientations=[[0.0, 0.0, 0.0, 1.0]] * count,
+            linkInertialFramePositions=[[0.0, 0.0, 0.0]] * count,
+            linkInertialFrameOrientations=[[0.0, 0.0, 0.0, 1.0]] * count,
+            linkParentIndices=parents,
+            linkJointTypes=[pb.JOINT_FIXED] * count,
+            linkJointAxis=[[0.0, 0.0, 1.0]] * count,
         )
         client.changeDynamics(body_id, -1, lateralFriction=1.1, rollingFriction=0.002)
         client.changeDynamics(body_id, 0, lateralFriction=1.1)
+        if texture_path is not None:
+            texture = client.loadTexture(str(texture_path))
+            client.changeVisualShape(
+                body_id, 1, textureUniqueId=texture, rgbaColor=[1.0, 1.0, 1.0, 1.0]
+            )
         return body_id
 
     def tube_position(self, body_id: int) -> np.ndarray:

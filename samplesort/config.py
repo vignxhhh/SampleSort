@@ -130,6 +130,27 @@ class ArmConfig(_Base):
 # ------------------------------------------------------------------------ camera
 
 
+class WristCameraConfig(_Base):
+    """A close-range camera on the gripper, used to read sample IDs at pick-up.
+
+    The overhead camera resolves roughly a millimetre per pixel, so a QR code
+    printed on a 19 mm cap spans about a dozen pixels — far below the ~60 a
+    decoder needs. The wrist camera looks straight down at the cap from the
+    pre-grasp pose instead, where the same code spans hundreds of pixels.
+    """
+
+    index: int | None = None
+    width: int = Field(default=640, gt=0)
+    height: int = Field(default=640, gt=0)
+    vertical_fov_deg: float = Field(default=40.0, gt=0.0, lt=180.0)
+    standoff_m: float = Field(default=0.008, ge=0.0)
+
+    @property
+    def resolution(self) -> tuple[int, int]:
+        """Image size as ``(width, height)``."""
+        return (self.width, self.height)
+
+
 class CameraConfig(_Base):
     """Overhead camera hardware settings plus its nominal pose in the base frame."""
 
@@ -145,6 +166,7 @@ class CameraConfig(_Base):
     vertical_fov_deg: float = Field(gt=0.0, lt=180.0)
     near: float = Field(gt=0.0)
     far: float = Field(gt=0.0)
+    wrist: WristCameraConfig | None = None
 
     @model_validator(mode="after")
     def _check_clip(self) -> CameraConfig:
@@ -196,6 +218,14 @@ class TubeConfig(_Base):
     cap_height: float = Field(gt=0.0)
     min_separation: float = Field(gt=0.0)
     mass: float = Field(gt=0.0)
+    label_side: float = Field(default=0.0085, gt=0.0)
+
+    @model_validator(mode="after")
+    def _check_label(self) -> TubeConfig:
+        # The largest square that fits on the cap's top face.
+        if self.label_side >= self.cap_radius * 2.0**0.5:
+            raise ValueError("tube.label_side must fit inside the cap (< cap_radius * sqrt(2))")
+        return self
 
     @property
     def total_height(self) -> float:
@@ -355,6 +385,7 @@ class ClassesConfig(_Base):
     classes: list[ClassConfig]
     detector: DetectorConfig
     qr_enabled: bool = False
+    sample_id_prefix: str = Field(default="SS", min_length=1, max_length=12)
 
     @model_validator(mode="after")
     def _check_labels(self) -> ClassesConfig:

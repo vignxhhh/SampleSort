@@ -168,7 +168,9 @@ class SortPipeline:
         self.detector = TubeDetector(config, self.calibration)
         self.rack_state = RackState(config.workspace, config.classes)
         self.planner = TaskPlanner(config, self.rack_state)
-        self.controller = controller or ScriptedController(config, backend.arm, backend.world)
+        self.controller = controller or ScriptedController(
+            config, backend.arm, backend.world, scanner=backend.scanner
+        )
         self._noise_rng = np.random.default_rng(config.seed)
 
     # ------------------------------------------------------------- calibration
@@ -287,7 +289,9 @@ class SortPipeline:
                 mode=self.config.pipeline.control_mode,
                 success=result.success,
                 duration_s=result.duration_s,
-                sample_id=job.sample_id,
+                # The wrist scan reads the cap being picked; an ID from the
+                # overhead frame is the fallback for a camera that can resolve it.
+                sample_id=result.sample_id or job.sample_id,
                 failure_reason=None if result.success else result.reason.value,
                 run_id=run_id,
             )

@@ -210,6 +210,9 @@ class QRReader:
         """Create a reader (see the class docstring for args)."""
         self.enabled = enabled
         self._detector = cv2.QRCodeDetector() if enabled else None
+        # The ArUco-based detector finds rotated, aliased codes the classic one
+        # misses; it is the second stage of :meth:`read_one`.
+        self._aruco_detector = cv2.QRCodeDetectorAruco() if enabled else None
 
     def read(self, frame: np.ndarray) -> list[tuple[str, tuple[float, float]]]:
         """Decode every QR code visible in a frame.
@@ -238,3 +241,34 @@ class QRReader:
             centre = np.mean(np.asarray(quad, dtype=float).reshape(-1, 2), axis=0)
             results.append((str(text), (float(centre[0]), float(centre[1]))))
         return results
+
+    def read_one(self, frame: np.ndarray) -> tuple[str, tuple[float, float]] | None:
+        """Decode the single most prominent QR code in a frame.
+
+        Used when one code is expected in view and :meth:`read` found nothing.
+        It tries, in order: the classic detector, the ArUco-based detector, and
+        the classic detector on a lightly blurred frame. Each stage rescued real
+        failures on the simulated wrist camera, where a rotated code's module
+        edges come out jagged.
+
+        Returns:
+            ``(decoded_text, (u, v))``, or ``None`` if nothing could be read.
+        """
+        if not self.enabled or self._detector is None or self._aruco_detector is None:
+            return None
+        blurred = cv2.GaussianBlur(frame, (3, 3), 0)
+        attempts = (
+            (self._detector, frame),
+            (self._aruco_detector, frame),
+            (self._detector, blurred),
+        )
+        for detector, image in attempts:
+            try:
+                text, points, _ = detector.detectAndDecode(image)
+            except cv2.error as exc:  # pragma: no cover - malformed frames only
+                logger.warning("QR decoding failed: %s", exc)
+                continue
+            if text and points is not None:
+                centre = np.mean(np.asarray(points, dtype=float).reshape(-1, 2), axis=0)
+                return (str(text), (float(centre[0]), float(centre[1])))
+        return None

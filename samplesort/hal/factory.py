@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from samplesort.config import SampleSortConfig
 from samplesort.hal.arm import ArmInterface
 from samplesort.hal.camera import CameraInterface
+from samplesort.hal.scanner import IdScannerInterface
 from samplesort.sim.world import SimWorld
 
 logger = logging.getLogger(__name__)
@@ -27,19 +28,26 @@ class Backend:
         arm: The selected arm implementation.
         camera: The selected camera implementation.
         world: The simulation world, or ``None`` in real mode.
+        scanner: The wrist-camera sample-ID scanner, or ``None`` when none is
+            configured.
     """
 
     arm: ArmInterface
     camera: CameraInterface
     world: SimWorld | None = None
+    scanner: IdScannerInterface | None = None
 
     def connect(self) -> None:
-        """Connect the camera and the arm."""
+        """Connect the camera, the arm and the scanner when there is one."""
         self.arm.connect()
         self.camera.connect()
+        if self.scanner is not None:
+            self.scanner.connect()
 
     def disconnect(self) -> None:
         """Disconnect everything, including the sim world when there is one."""
+        if self.scanner is not None:
+            self.scanner.disconnect()
         self.camera.disconnect()
         self.arm.disconnect()
         if self.world is not None:
@@ -74,12 +82,15 @@ def build_backend(
     if config.mode == "sim":
         from samplesort.hal.sim_arm import SimArm
         from samplesort.hal.sim_camera import SimCamera
+        from samplesort.hal.sim_scanner import SimIdScanner
 
         world = SimWorld(config, gui=gui, seed=seed)
+        wrist = config.camera.wrist
         return Backend(
             arm=SimArm(config.arm, world),
             camera=SimCamera(config.camera, world),
             world=world,
+            scanner=SimIdScanner(wrist, world) if wrist is not None else None,
         )
 
     if config.mode == "real":
@@ -87,6 +98,12 @@ def build_backend(
         from samplesort.hal.real_camera import RealCamera
 
         logger.info("building real hardware backend on %s", config.arm.serial_port)
-        return Backend(arm=RealArm(config.arm), camera=RealCamera(config.camera))
+        wrist = config.camera.wrist
+        scanner: IdScannerInterface | None = None
+        if wrist is not None and wrist.index is not None:
+            from samplesort.hal.scanner import RealIdScanner
+
+            scanner = RealIdScanner(wrist)
+        return Backend(arm=RealArm(config.arm), camera=RealCamera(config.camera), scanner=scanner)
 
     raise ValueError(f"unknown mode '{config.mode}'; expected 'sim' or 'real'")

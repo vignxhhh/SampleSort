@@ -14,3 +14,15 @@ up_axis: [1.0, 0.0, 0.0]       # image "up" points along +X of the base frame
 vertical_fov_deg: 45.0
 near: 0.05
 far: 2.0
+
+# Close-range camera on the gripper, used to read the QR sample ID printed on each
+# cap. The overhead camera cannot: at ~1.1 mm/px a cap's 13 mm label is ~12 px
+# across, and a QR code needs ~60. From the pre-grasp pose an 8.5 mm label spans
+# ~130 px at 640x640. In sim it renders from the tool frame; in real mode set `index` to the
+# wrist camera's VideoCapture index, or leave it null if no wrist camera is fitted.
+wrist:
+  index: null
+  width: 640
+  height: 640
+  vertical_fov_deg: 40.0
+  standoff_m: 0.008          # camera sits this far below the TCP, clear of the tool body

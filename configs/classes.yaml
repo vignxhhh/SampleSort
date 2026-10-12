@@ -39,5 +39,8 @@ detector:
   morph_kernel: 3
   min_confidence: 0.25
 
-# Stretch goal: read a printed sample ID from a QR code on the tube.
-qr_enabled: false
+# Read a printed sample ID from the QR code on each cap with the wrist camera,
+# and record it in the sort log. In sim each tube is labelled
+# <sample_id_prefix>-0001, -0002, ... in spawn order.
+qr_enabled: true
+sample_id_prefix: SS

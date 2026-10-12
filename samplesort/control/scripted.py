@@ -19,6 +19,7 @@ import numpy as np
 
 from samplesort.config import SampleSortConfig
 from samplesort.hal.arm import ArmError, ArmInterface
+from samplesort.hal.scanner import IdScannerInterface
 from samplesort.planning.kinematics import Pose, UnreachableError, inverse_kinematics
 from samplesort.planning.task_planner import PickPlaceJob
 
@@ -70,6 +71,7 @@ class ExecutionResult:
         grasped: Whether the grasp stage succeeded, regardless of the final outcome.
         place_error_m: Distance from the target slot centre, when measurable.
         waypoints: The joint configurations that were commanded.
+        sample_id: The ID read from the cap by the wrist scanner, when one was.
     """
 
     success: bool
@@ -78,6 +80,7 @@ class ExecutionResult:
     grasped: bool = False
     place_error_m: float | None = None
     waypoints: list[np.ndarray] = field(default_factory=list)
+    sample_id: str | None = None
 
     @property
     def failed(self) -> bool:
@@ -94,6 +97,9 @@ class ScriptedController:
         world: Optional simulation world used to verify grasps and placements.
             In real mode this is ``None`` and verification falls back to the
             gripper's own state.
+        scanner: Optional wrist-camera scanner. When present and
+            ``classes.qr_enabled`` is set, the cap's sample ID is read from the
+            pre-grasp pose, where the camera is centred over the tube.
     """
 
     #: How close to the slot centre a tube must land to count as correctly placed.
@@ -104,11 +110,13 @@ class ScriptedController:
         config: SampleSortConfig,
         arm: ArmInterface,
         world: PlacementVerifier | None = None,
+        scanner: IdScannerInterface | None = None,
     ) -> None:
         """Bind the controller to an arm (see the class docstring for args)."""
         self.config = config
         self.arm = arm
         self.world = world
+        self.scanner = scanner
 
     # ------------------------------------------------------------------ planning
 
@@ -189,6 +197,7 @@ class ScriptedController:
         try:
             self.arm.open_gripper()
             self._move(stages["pre_grasp"])
+            result.sample_id = self._scan_sample_id()
             self._move(stages["grasp"])
             self.arm.close_gripper()
 
@@ -233,6 +242,14 @@ class ScriptedController:
         return result
 
     # ------------------------------------------------------------------- helpers
+
+    def _scan_sample_id(self) -> str | None:
+        """Read the cap's sample ID from the pre-grasp pose, when scanning is on."""
+        if self.scanner is None or not self.config.classes.qr_enabled:
+            return None
+        if not self.scanner.is_connected:
+            return None
+        return self.scanner.scan()
 
     def _move(self, q: np.ndarray) -> None:
         """Command one joint waypoint, timed from the configured joint velocity."""
