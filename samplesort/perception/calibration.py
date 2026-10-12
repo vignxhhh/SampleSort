@@ -138,6 +138,32 @@ class Calibration:
         x, y = float(point[0] / point[2]), float(point[1] / point[2])
         return self.correct_parallax(x, y, object_height)
 
+    def point_to_pixel(self, x: float, y: float, height: float) -> tuple[float, float]:
+        """Project a point at a known height above the table into the image.
+
+        The inverse of :meth:`pixel_to_table` with ``object_height``: a raised
+        point appears pushed away from the camera's nadir, by ``H / (H - h)``.
+
+        Args:
+            x: Base-frame position in metres.
+            y: Base-frame position in metres.
+            height: Height of the point above the table plane.
+
+        Returns:
+            The ``(u, v)`` pixel.
+
+        Raises:
+            CalibrationError: If the point is at or above the camera.
+        """
+        if height == 0.0 or not self.corrects_parallax:
+            return self.table_to_pixel(x, y)
+        assert self.camera_height is not None and self.camera_nadir_xy is not None
+        if height >= self.camera_height:
+            raise CalibrationError("cannot project a point at or above the camera")
+        nx, ny = self.camera_nadir_xy
+        scale = self.camera_height / (self.camera_height - height)
+        return self.table_to_pixel(nx + (x - nx) * scale, ny + (y - ny) * scale)
+
     def table_to_pixel(self, x: float, y: float) -> tuple[float, float]:
         """Map a table-frame point back into image coordinates.
 

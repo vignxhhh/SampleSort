@@ -10,7 +10,9 @@ failures down by type.
 from __future__ import annotations
 
 import logging
+import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol, runtime_checkable
@@ -20,7 +22,15 @@ import numpy as np
 from samplesort.config import SampleSortConfig
 from samplesort.hal.arm import ArmError, ArmInterface
 from samplesort.hal.scanner import IdScannerInterface
-from samplesort.planning.kinematics import Pose, UnreachableError, inverse_kinematics
+from samplesort.perception.types import FallenTube
+from samplesort.planning.kinematics import (
+    TOP_DOWN_PITCH,
+    Pose,
+    UnreachableError,
+    inverse_kinematics,
+    tool_rotation,
+    top_down_roll_for_axis,
+)
 from samplesort.planning.task_planner import PickPlaceJob
 
 logger = logging.getLogger(__name__)
@@ -36,6 +46,30 @@ class FailureReason(str, Enum):
     DROPPED_IN_TRANSIT = "dropped_in_transit"
     MISPLACED = "misplaced"
     ARM_ERROR = "arm_error"
+    BODY_SIDE_UNKNOWN = "body_side_unknown"
+    NO_RIGHTING_STATION = "no_righting_station"
+
+
+#: Answers "which way along this axis does the held tube's body point?" given
+#: the cap's position and a horizontal axis: +1, -1, or ``None`` if unsure.
+BodySideProbe = Callable[[np.ndarray, np.ndarray], "float | None"]
+
+#: Roll used for "tool Z pointing down" once horizontal. Exactly pi sits on the
+#: joint limit; a hair inside it is the same pose for every practical purpose.
+_ROLL_HALF_TURN = math.pi - 1e-4
+
+#: Height the tube's base is released above the table when it is set upright.
+_RIGHTING_DROP_M = 0.003
+
+#: How far the gripper backs away, along its own axis, after setting a tube down.
+_RIGHTING_RETREAT_M = 0.045
+
+#: Slow-down while carrying a fallen tube. It is gripped by the cap, far from its
+#: centre of mass. At full speed the simulated grip lags and jolts the arm
+#: (measured: 278 mm TCP error on a lift); at 2.5x the arm is steady but the tube
+#: still twists 2-22 degrees in the grip; at 5x the twist is 2-9 degrees. Grip
+#: force made no difference, so this is a speed limit, not a force limit.
+_CARRY_SLOWDOWN = 5.0
 
 
 @runtime_checkable
@@ -88,6 +122,25 @@ class ExecutionResult:
         return not self.success
 
 
+@dataclass
+class RightingResult:
+    """The outcome of standing one fallen tube back up.
+
+    Attributes:
+        success: Whether the manoeuvre completed. Whether the tube is actually
+            standing is confirmed by the next overhead frame, not assumed here.
+        reason: Which stage failed, or :attr:`FailureReason.NONE`.
+        duration_s: Wall-clock seconds the attempt took.
+        body_side: ``+1``/``-1`` for the side the body was found on in the tool
+            frame, or ``None`` if it could not be decided.
+    """
+
+    success: bool
+    reason: FailureReason = FailureReason.NONE
+    duration_s: float = 0.0
+    body_side: float | None = None
+
+
 class ScriptedController:
     """Executes :class:`~samplesort.planning.task_planner.PickPlaceJob` objects.
 
@@ -134,7 +187,7 @@ class ScriptedController:
         place_z = ws.rack_grasp_height
         clearance = ws.approach_clearance
 
-        return [
+        poses = [
             ("pre_grasp", job.pick_pose(grasp_z + clearance)),
             ("grasp", job.pick_pose(grasp_z)),
             ("lift", job.pick_pose(grasp_z + clearance)),
@@ -142,6 +195,14 @@ class ScriptedController:
             ("place", job.place_pose(place_z)),
             ("retreat", job.place_pose(place_z + clearance)),
         ]
+        if ws.near_righting_station(*job.pick_xy):
+            # The station sits beyond the racks, so a direct swing from it to a
+            # rack crosses other racks' slots (measured: it toppled a tube already
+            # in Rack C). Route via the pickup zone, which is empty by the time a
+            # righted tube is sorted, so the rest of the move is an ordinary one.
+            via = Pose(*ws.pickup_zone.center, grasp_z + clearance)
+            poses.insert(3, ("via", via))
+        return poses
 
     def solve_waypoints(self, job: PickPlaceJob) -> list[tuple[str, np.ndarray]]:
         """Solve the IK for every waypoint of a job.
@@ -210,6 +271,8 @@ class ScriptedController:
 
             result.grasped = True
             self._move(stages["lift"])
+            if "via" in stages:
+                self._move(stages["via"])
 
             if not self._holding():
                 result.reason = FailureReason.DROPPED_IN_TRANSIT
@@ -241,6 +304,184 @@ class ScriptedController:
         result.duration_s = time.perf_counter() - started
         return result
 
+    # ------------------------------------------------------------------ righting
+
+    def lying_grip_offset(self) -> float:
+        """How far along the approach axis a lying tube's cap centre sits from the TCP.
+
+        The palm block hangs half its depth below the fingertips, so reaching
+        all the way down to a lying cap presses it into the table — measured in
+        sim: the cap ended 5 mm below the surface and twisted 87 degrees in the
+        grip on lifting. Holding it from just above the cap's top keeps the palm
+        clear while staying inside the grasp tolerance.
+        """
+        grip = self.config.arm.gripper
+        return self.config.workspace.tube.cap_radius + grip.palm_depth / 2.0 + 0.001
+
+    def righting_poses(self, fallen: FallenTube) -> dict[str, Pose]:
+        """The fixed waypoints of a righting manoeuvre, before the body side is known.
+
+        Raises:
+            ValueError: If no righting station is configured.
+        """
+        ws = self.config.workspace
+        if ws.righting_station is None:
+            raise ValueError("no righting station is configured")
+        tube = ws.tube
+        cx, cy = fallen.table_xy
+        safe = ws.table_height + tube.total_height + ws.approach_clearance
+        grip_roll = top_down_roll_for_axis(cx, cy, fallen.axis_yaw)
+        # Inspect it right where it was picked up: that spot is now empty, near
+        # the middle of the camera's view, and every standing tube has already
+        # been sorted. Turn it to lie across the arm so both ends stand clear of
+        # the arm in the overhead camera's view.
+        across_roll = top_down_roll_for_axis(cx, cy, math.atan2(cy, cx) + math.pi / 2.0)
+        return {
+            "pre_grasp": Pose(cx, cy, safe, TOP_DOWN_PITCH, grip_roll),
+            # A lying cap's centre sits one cap radius above the table; the TCP
+            # stays lying_grip_offset() above that.
+            "grasp": Pose(
+                cx,
+                cy,
+                ws.table_height + tube.cap_radius + self.lying_grip_offset(),
+                TOP_DOWN_PITCH,
+                grip_roll,
+            ),
+            "lift": Pose(cx, cy, safe, TOP_DOWN_PITCH, grip_roll),
+            "inspect": Pose(cx, cy, safe, TOP_DOWN_PITCH, across_roll),
+        }
+
+    def right_tube(self, fallen: FallenTube, body_side: BodySideProbe) -> RightingResult:
+        """Pick a fallen tube up by its cap and stand it upright at the station.
+
+        The sequence: grip the cap from above with the fingers across it, lift,
+        carry it to the station, hold it across the arm and ask ``body_side``
+        which end is the body, roll so that end will point down, pitch the tool
+        level so the tube swings upright, lower it to just above the table,
+        release, and back away along the tool axis.
+
+        Args:
+            fallen: The tube to right.
+            body_side: Probe that inspects the held tube (see :data:`BodySideProbe`).
+
+        Returns:
+            A :class:`RightingResult`.
+        """
+        started = time.perf_counter()
+        result = RightingResult(success=False)
+        ws = self.config.workspace
+        if ws.righting_station is None:
+            result.reason = FailureReason.NO_RIGHTING_STATION
+            return result
+
+        try:
+            poses = self.righting_poses(fallen)
+            solved = {
+                name: inverse_kinematics(self.config.arm, pose) for name, pose in poses.items()
+            }
+        except UnreachableError as exc:
+            logger.warning("cannot right %s: %s", fallen.describe(), exc)
+            result.reason = FailureReason.UNREACHABLE_PICK
+            result.duration_s = time.perf_counter() - started
+            return result
+
+        try:
+            self.arm.open_gripper()
+            self._move(solved["pre_grasp"])
+            self._move(solved["grasp"])
+            self.arm.close_gripper()
+            if not self._holding():
+                result.reason = FailureReason.GRASP_MISSED
+                self._recover()
+                return self._finish(result, started)
+
+            self._move(solved["lift"], slowdown=_CARRY_SLOWDOWN)
+            self._move(solved["inspect"], slowdown=_CARRY_SLOWDOWN)
+            if not self._holding():
+                result.reason = FailureReason.DROPPED_IN_TRANSIT
+                self._recover()
+                return self._finish(result, started)
+
+            inspect = poses["inspect"]
+            frame = tool_rotation(inspect)
+            cap_centre = inspect.position + frame[:, 0] * self.lying_grip_offset()
+            side = body_side(cap_centre, frame[:, 2])
+            result.body_side = side
+            if side is None:
+                logger.warning("could not tell which end of %s is the body", fallen.describe())
+                self._set_down_lying(poses)
+                result.reason = FailureReason.BODY_SIDE_UNKNOWN
+                return self._finish(result, started)
+
+            self._stand_up(side)
+        except (ArmError, UnreachableError) as exc:
+            logger.error("righting %s failed: %s", fallen.describe(), exc)
+            result.reason = FailureReason.ARM_ERROR
+            self._recover()
+            return self._finish(result, started)
+
+        result.success = True
+        return self._finish(result, started)
+
+    def _stand_up(self, side: float) -> None:
+        """Roll, pitch level, lower and release a tube held across the arm at the station.
+
+        Level with roll 0 the tool's Z axis points up, and with roll pi it points
+        down. The body must end up below the cap, so the roll is pi when the body
+        lies along the tool's +Z and 0 when it lies along -Z.
+        """
+        ws = self.config.workspace
+        tube = ws.tube
+        assert ws.righting_station is not None
+        sx, sy = ws.righting_station
+        safe = ws.table_height + tube.total_height + ws.approach_clearance
+        roll = _ROLL_HALF_TURN if side > 0 else 0.0
+
+        # Level, the tool axis points straight out from the arm and the held cap
+        # sits lying_grip_offset() beyond the TCP along it; stand the TCP that
+        # far short of the station so the tube itself lands on the station.
+        radial = np.array([sx, sy]) / max(float(np.hypot(sx, sy)), 1e-9)
+        tx, ty = np.array([sx, sy]) - radial * self.lying_grip_offset()
+        tx, ty = float(tx), float(ty)
+
+        self._move_to(Pose(sx, sy, safe, TOP_DOWN_PITCH, roll), carrying=True)
+        for pitch in np.linspace(TOP_DOWN_PITCH, 0.0, 5)[1:]:
+            self._move_to(Pose(tx, ty, safe, float(pitch), roll), carrying=True)
+
+        # Level, the cap is beside the TCP, so the base hangs cap-half-height
+        # plus the body length below it.
+        place_z = ws.table_height + tube.cap_height / 2.0 + tube.body_height + _RIGHTING_DROP_M
+        self._move_to(Pose(tx, ty, place_z, 0.0, roll), carrying=True)
+        self.arm.open_gripper()
+        self._settle()
+
+        bx, by = np.array([tx, ty]) - radial * _RIGHTING_RETREAT_M
+        self._move_to(Pose(float(bx), float(by), place_z, 0.0, roll))
+        self._move_to(Pose(float(bx), float(by), safe, 0.0, roll))
+        self._move_to(Pose(float(bx), float(by), safe, TOP_DOWN_PITCH, 0.0))
+
+    def _set_down_lying(self, poses: dict[str, Pose]) -> None:
+        """Put an unresolved tube down at the station as it was held, and back off."""
+        inspect = poses["inspect"]
+        ws = self.config.workspace
+        down = inspect.with_z(
+            ws.table_height + ws.tube.cap_radius + self.lying_grip_offset() + _RIGHTING_DROP_M
+        )
+        self._move_to(down, carrying=True)
+        self.arm.open_gripper()
+        self._settle()
+        self._move_to(inspect)
+
+    def _move_to(self, pose: Pose, *, carrying: bool = False) -> None:
+        """Solve and command one Cartesian waypoint, slower when carrying a fallen tube."""
+        slowdown = _CARRY_SLOWDOWN if carrying else 1.0
+        self._move(inverse_kinematics(self.config.arm, pose), slowdown=slowdown)
+
+    @staticmethod
+    def _finish(result: RightingResult, started: float) -> RightingResult:
+        result.duration_s = time.perf_counter() - started
+        return result
+
     # ------------------------------------------------------------------- helpers
 
     def _scan_sample_id(self) -> str | None:
@@ -251,12 +492,12 @@ class ScriptedController:
             return None
         return self.scanner.scan()
 
-    def _move(self, q: np.ndarray) -> None:
+    def _move(self, q: np.ndarray, *, slowdown: float = 1.0) -> None:
         """Command one joint waypoint, timed from the configured joint velocity."""
         from samplesort.control.trajectory import duration_for
 
         current = self.arm.get_joint_positions()
-        self.arm.move_to_joints(q, duration_for(self.config.arm, current, q))
+        self.arm.move_to_joints(q, duration_for(self.config.arm, current, q) * slowdown)
 
     def _holding(self) -> bool:
         """Whether the gripper is holding a tube, when the arm can tell us."""

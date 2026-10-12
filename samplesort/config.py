@@ -43,6 +43,10 @@ class GripperConfig(_Base):
     finger_length: float = Field(gt=0.0)
     grasp_tolerance_xy: float = Field(gt=0.0)
     grasp_tolerance_z: float = Field(gt=0.0)
+    #: Thickness of the gripper's palm block along the approach axis. The block
+    #: is centred on the tool centre point, so half of it hangs below the
+    #: fingertips; a grasp from above must stay that far clear of the table.
+    palm_depth: float = Field(default=0.012, gt=0.0)
 
     @model_validator(mode="after")
     def _check_widths(self) -> GripperConfig:
@@ -199,9 +203,12 @@ class PickupZone(_Base):
             raise ValueError("pickup_zone bounds are inverted or degenerate")
         return self
 
-    def contains(self, x: float, y: float) -> bool:
-        """Return whether ``(x, y)`` lies inside the zone."""
-        return self.x_min <= x <= self.x_max and self.y_min <= y <= self.y_max
+    def contains(self, x: float, y: float, *, margin: float = 0.0) -> bool:
+        """Return whether ``(x, y)`` lies inside the zone, optionally grown by ``margin``."""
+        return (
+            self.x_min - margin <= x <= self.x_max + margin
+            and self.y_min - margin <= y <= self.y_max + margin
+        )
 
     @property
     def center(self) -> tuple[float, float]:
@@ -282,6 +289,8 @@ class WorkspaceConfig(_Base):
     rack_plate_height: float = Field(gt=0.0)
     racks: list[RackConfig]
     marker_board: MarkerBoardConfig
+    righting_station: tuple[float, float] | None = None
+    righting_station_radius: float = Field(default=0.03, gt=0.0)
 
     @model_validator(mode="after")
     def _check_racks(self) -> WorkspaceConfig:
@@ -292,6 +301,28 @@ class WorkspaceConfig(_Base):
         if duplicates:
             raise ValueError(f"duplicate rack ids in workspace config: {sorted(duplicates)}")
         return self
+
+    @model_validator(mode="after")
+    def _check_righting_station(self) -> WorkspaceConfig:
+        if self.righting_station is None:
+            return self
+        x, y = self.righting_station
+        if self.pickup_zone.contains(x, y):
+            raise ValueError("workspace.righting_station must lie outside the pickup zone")
+        # A standing tube needs its own footprint clear of every rack slot.
+        clearance = 2.0 * self.tube.cap_radius + 0.01
+        for rack in self.racks:
+            for sx, sy in rack.slots:
+                if ((x - sx) ** 2 + (y - sy) ** 2) ** 0.5 < clearance:
+                    raise ValueError(f"workspace.righting_station overlaps a slot of {rack.id}")
+        return self
+
+    def near_righting_station(self, x: float, y: float) -> bool:
+        """Whether a table point is at the righting station."""
+        if self.righting_station is None:
+            return False
+        sx, sy = self.righting_station
+        return bool(((x - sx) ** 2 + (y - sy) ** 2) ** 0.5 <= self.righting_station_radius)
 
     @property
     def rack_grasp_height(self) -> float:
@@ -367,6 +398,7 @@ class DetectorConfig(_Base):
     blur_kernel: int = Field(ge=1)
     morph_kernel: int = Field(ge=1)
     min_confidence: float = Field(ge=0.0, le=1.0)
+    fallen_aspect_min: float = Field(default=1.25, gt=1.0)
 
     @model_validator(mode="after")
     def _check_area_and_kernels(self) -> DetectorConfig:
@@ -433,6 +465,7 @@ class PipelineConfig(_Base):
     settle_steps: int = Field(default=60, ge=0)
     policy_path: Path | None = None
     perception_noise_m: float = Field(default=0.0, ge=0.0)
+    max_righting_attempts: int = Field(default=2, ge=0)
 
 
 # ---------------------------------------------------------------------- learning
@@ -528,7 +561,38 @@ class SampleSortConfig(_Base):
                 raise ValueError(
                     f"pickup_zone corner ({x}, {y}) is outside the arm's {reach:.3f} m reach"
                 )
+        self._check_station_corridor()
         return self
+
+    def _check_station_corridor(self) -> None:
+        """Keep the wrist link's sweep beside the righting station clear of the racks.
+
+        Standing a tube up holds the tool level, so the last link lies flat at
+        tube height, running from the station back towards the arm. Every rack
+        slot (and the standing tube in it) must clear that segment.
+        """
+        station = self.workspace.righting_station
+        if station is None:
+            return
+        sx, sy = station
+        radius = (sx**2 + sy**2) ** 0.5
+        if radius == 0.0:
+            raise ValueError("workspace.righting_station cannot be at the arm base")
+        ux, uy = sx / radius, sy / radius
+        length = self.arm.link_lengths[2] + 0.03
+        ax, ay = sx - ux * length, sy - uy * length
+        # Half the link's width, plus a standing tube's cap, plus margin.
+        needed = 0.016 + self.workspace.tube.cap_radius + 0.012
+        for rack in self.workspace.racks:
+            for px, py in rack.slots:
+                bx, by = sx - ax, sy - ay
+                t = max(0.0, min(1.0, ((px - ax) * bx + (py - ay) * by) / (bx * bx + by * by)))
+                cx, cy = ax + t * bx, ay + t * by
+                if ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 < needed:
+                    raise ValueError(
+                        f"the wrist link would sweep over {rack.id} while standing a tube "
+                        "up at workspace.righting_station; move the station"
+                    )
 
     def rack_for_class(self, label: str) -> str:
         """Return the rack id that samples of ``label`` belong in."""

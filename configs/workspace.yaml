@@ -30,6 +30,15 @@ grasp_height: 0.0460           # TCP height when closing on a tube cap
 approach_clearance: 0.0700     # extra height for pre-grasp / lift / transit poses
 rack_plate_height: 0.0080      # thickness of a rack plate; raises its grasp height
 
+# Where a knocked-over tube is stood back up, then sorted from like any other.
+# Chosen by search, not by eye: of 52 spots that are reachable, outside the pickup
+# zone and clear of the wrist link's sweep (standing a tube holds the tool level,
+# so the last link lies flat at tube height), only three still show an upright cap
+# as round to the overhead camera; near the edge of the view perspective makes it
+# look elongated, i.e. fallen. This one reads aspect 1.08 against the 1.25 cut.
+righting_station: [0.2800, 0.1600]
+righting_station_radius: 0.0300
+
 racks:
   - id: rack_a
     label: "Rack A"

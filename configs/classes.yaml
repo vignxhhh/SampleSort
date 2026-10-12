@@ -38,6 +38,9 @@ detector:
   blur_kernel: 5
   morph_kernel: 3
   min_confidence: 0.25
+  # A cap seen side-on (tube knocked over) is a 19 x 12 mm rectangle, aspect ~1.45;
+  # an upright cap is a disc, aspect <= ~1.06. Blobs at or above this are fallen.
+  fallen_aspect_min: 1.25
 
 # Read a printed sample ID from the QR code on each cap with the wrist camera,
 # and record it in the sort log. In sim each tube is labelled

@@ -4,6 +4,11 @@ One iteration retracts the arm to its observe pose, captures a frame, detects an
 classifies every tube in the pickup zone, plans jobs against the current rack
 state, and executes them. Failed grasps are retried once and then skipped; every
 attempt is written to the sort log either way.
+
+Tubes that have fallen over are handled once every standing tube is gone, so the
+gripper never has to reach down beside a standing neighbour: one fallen tube at
+a time is carried to the righting station and stood up, and the next iteration
+sorts it from there like any other tube.
 """
 
 from __future__ import annotations
@@ -16,7 +21,12 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from samplesort.config import SampleSortConfig
-from samplesort.control.scripted import ExecutionResult, FailureReason, ScriptedController
+from samplesort.control.scripted import (
+    ExecutionResult,
+    FailureReason,
+    RightingResult,
+    ScriptedController,
+)
 from samplesort.hal.factory import Backend
 from samplesort.hal.sim_camera import SimCamera
 from samplesort.logging_db.sort_log import SortLog, SortRecord
@@ -27,7 +37,8 @@ from samplesort.perception.calibration import (
     calibration_from_camera_pose,
 )
 from samplesort.perception.detector import TubeDetector
-from samplesort.perception.types import Detection
+from samplesort.perception.fallen import body_side
+from samplesort.perception.types import Detection, FallenTube, Scene
 from samplesort.planning.rack_state import RackState
 from samplesort.planning.task_planner import PickPlaceJob, PlanResult, TaskPlanner
 
@@ -55,6 +66,24 @@ class JobOutcome:
 
 
 @dataclass
+class RightingOutcome:
+    """One attempt to stand a fallen tube back up.
+
+    Attributes:
+        fallen: The tube as it was detected.
+        result: What the controller reported.
+    """
+
+    fallen: FallenTube
+    result: RightingResult
+
+    @property
+    def success(self) -> bool:
+        """Whether the manoeuvre completed."""
+        return self.result.success
+
+
+@dataclass
 class PipelineReport:
     """Summary of one complete pipeline run.
 
@@ -67,6 +96,8 @@ class PipelineReport:
         skipped: ``(class_label, reason)`` for each detection that was not planned.
         duration_s: Wall-clock seconds for the whole run.
         dry_run: Whether motion was suppressed.
+        rightings: One entry per attempt to stand a fallen tube back up.
+        fallen_left: Fallen tubes still lying in the work area when the run ended.
     """
 
     run_id: str
@@ -77,6 +108,13 @@ class PipelineReport:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     duration_s: float = 0.0
     dry_run: bool = False
+    rightings: list[RightingOutcome] = field(default_factory=list)
+    fallen_left: list[FallenTube] = field(default_factory=list)
+
+    @property
+    def righted(self) -> int:
+        """How many righting attempts completed."""
+        return sum(1 for outcome in self.rightings if outcome.success)
 
     @property
     def attempted(self) -> int:
@@ -134,6 +172,12 @@ class PipelineReport:
             lines.append(f"  failures          : {breakdown}")
         if self.skipped:
             lines.append(f"  skipped detections: {len(self.skipped)}")
+        if self.rightings:
+            lines.append(
+                f"  fallen tubes      : {self.righted}/{len(self.rightings)} stood back up"
+            )
+        if self.fallen_left:
+            lines.append(f"  still fallen      : {len(self.fallen_left)}")
         return lines
 
 
@@ -202,17 +246,39 @@ class SortPipeline:
 
     # ------------------------------------------------------------------ helpers
 
-    def perceive(self) -> list[Detection]:
-        """Retract the arm clear of the camera and detect tubes in the pickup zone.
+    def perceive_scene(self) -> Scene:
+        """Retract the arm clear of the camera and look at the work area.
 
         Returns:
-            Detections inside the pickup zone, highest confidence first.
+            Standing tubes in the pickup zone or at the righting station, and
+            fallen tubes, from a single frame.
         """
         self.backend.arm.move_to_joints(self.config.arm.observe_position)
         if self.backend.world is not None:
             self.backend.world.step(self.config.pipeline.settle_steps)
-        detections = self.detector.detect_in_pickup_zone(self.backend.camera.read())
-        return [self._jitter(d) for d in detections]
+        scene = self.detector.detect_scene(self.backend.camera.read())
+        return Scene(upright=[self._jitter(d) for d in scene.upright], fallen=scene.fallen)
+
+    def perceive(self) -> list[Detection]:
+        """Standing tubes in the work area, highest confidence first."""
+        return self.perceive_scene().upright
+
+    def _body_side_probe(self, cap_xyz: np.ndarray, axis: np.ndarray) -> float | None:
+        """Ask the overhead camera which end of the held tube is the body."""
+        frame = self.backend.camera.read()
+        return body_side(frame, self.calibration, cap_xyz, axis, self.config.workspace.tube)
+
+    def _next_to_right(self, fallen: list[FallenTube]) -> FallenTube | None:
+        """The fallen tube to stand up next, or ``None`` if righting is not possible now."""
+        ws = self.config.workspace
+        if ws.righting_station is None:
+            return None
+        if any(ws.near_righting_station(*f.table_xy) for f in fallen):
+            logger.warning("a fallen tube is lying at the righting station; it is blocked")
+            return None
+        margin = ws.tube.total_height
+        in_zone = [f for f in fallen if ws.pickup_zone.contains(*f.table_xy, margin=margin)]
+        return in_zone[0] if in_zone else None
 
     def _jitter(self, detection: Detection) -> Detection:
         """Add the configured localisation noise to a detection.
@@ -332,14 +398,32 @@ class SortPipeline:
             run_id=identifier, mode=self.config.pipeline.control_mode, dry_run=dry_run
         )
 
+        righting_failures = 0
+        scene = Scene(upright=[], fallen=[])
         for iteration in range(self.config.pipeline.max_iterations):
-            detections = self.perceive()
+            scene = self.perceive_scene()
+            detections = scene.upright
             report.iterations = iteration + 1
             report.detections_seen += len(detections)
 
-            if not detections:
+            if scene.is_clear:
                 logger.info("pickup zone is clear after %d iteration(s)", report.iterations)
                 break
+
+            if not detections:
+                # Only fallen tubes are left, so their surroundings are clear.
+                if dry_run:
+                    for fallen in scene.fallen:
+                        logger.info("dry run: would stand up %s", fallen.describe())
+                    break
+                if not self._right_one(scene.fallen, report):
+                    righting_failures += 1
+                    if righting_failures > self.config.pipeline.max_righting_attempts:
+                        logger.warning(
+                            "giving up on fallen tubes after %d failures", righting_failures
+                        )
+                        break
+                continue
 
             plan = self.plan(detections)
             report.skipped.extend(
@@ -375,10 +459,26 @@ class SortPipeline:
                 self.config.pipeline.max_iterations,
             )
 
+        report.fallen_left = list(scene.fallen) if not scene.is_clear else []
         if not dry_run:
             self.backend.arm.go_home()
         report.duration_s = time.perf_counter() - started
         return report
+
+    def _right_one(self, fallen: list[FallenTube], report: PipelineReport) -> bool:
+        """Stand up one fallen tube. Returns whether an attempt was made and completed."""
+        right_tube = getattr(self.controller, "right_tube", None)
+        target = self._next_to_right(fallen)
+        if right_tube is None or target is None:
+            if right_tube is None:
+                logger.warning("the active controller cannot right fallen tubes")
+            return False
+        logger.info("standing up %s", target.describe())
+        result: RightingResult = right_tube(target, self._body_side_probe)
+        report.rightings.append(RightingOutcome(fallen=target, result=result))
+        if not result.success:
+            logger.warning("could not stand up %s: %s", target.describe(), result.reason.value)
+        return result.success
 
     def _mark_unsortable(self, job: PickPlaceJob) -> None:
         """Retire a tube the pipeline could not sort so the loop makes progress.

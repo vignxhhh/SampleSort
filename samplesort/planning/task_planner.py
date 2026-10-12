@@ -129,7 +129,8 @@ class TaskPlanner:
             x, y = detection.table_xy
             if detection.confidence < threshold:
                 skipped.append(SkippedDetection(detection, "low_confidence"))
-            elif not zone.contains(x, y):
+            elif not (zone.contains(x, y) or self.config.workspace.near_righting_station(x, y)):
+                # A tube at the righting station was stood up there to be sorted.
                 skipped.append(SkippedDetection(detection, "outside_pickup_zone"))
             else:
                 candidates.append(detection)

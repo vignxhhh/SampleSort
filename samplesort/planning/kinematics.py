@@ -111,6 +111,50 @@ def forward_kinematics(config: ArmConfig, q: np.ndarray | list[float]) -> Pose:
     )
 
 
+def tool_rotation(pose: Pose) -> np.ndarray:
+    """Rotation matrix of the tool frame for a pose, in the base frame.
+
+    The chain is yaw about +Z, then the summed pitch about -Y, then roll about
+    the tool's own X, so ``R = Rz(yaw) @ Ry(-pitch) @ Rx(roll)`` with the yaw
+    implied by the pose's XY. Column 0 is the approach axis, column 1 the
+    direction the fingers close along, column 2 the remaining axis.
+
+    Args:
+        pose: The tool pose.
+
+    Returns:
+        A ``(3, 3)`` rotation matrix.
+    """
+    yaw = math.atan2(pose.y, pose.x)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    cp, sp = math.cos(-pose.pitch), math.sin(-pose.pitch)
+    cr, sr = math.cos(pose.roll), math.sin(pose.roll)
+    rz = np.array([[cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]])
+    ry = np.array([[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]])
+    rx = np.array([[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]])
+    return np.asarray(rz @ ry @ rx, dtype=float)
+
+
+def top_down_roll_for_axis(x: float, y: float, axis_yaw: float) -> float:
+    """The roll that lays a top-down tool's Z axis along a horizontal direction.
+
+    Pointing straight down, the tool's Z axis lies in the table plane at yaw
+    ``atan2(y, x) - roll``. Aligning it with a line (direction modulo pi) has
+    two solutions half a turn apart; the one with the smaller wrist rotation
+    is returned.
+
+    Args:
+        x: Tool XY in the base frame.
+        y: Tool XY in the base frame.
+        axis_yaw: Direction of the line in the table plane, in radians.
+
+    Returns:
+        A roll in ``[-pi, pi]``.
+    """
+    base = math.atan2(y, x) - axis_yaw
+    return min((_wrap_to_pi(base), _wrap_to_pi(base - math.pi)), key=abs)
+
+
 def link_positions(config: ArmConfig, q: np.ndarray | list[float]) -> np.ndarray:
     """Return the base-frame XYZ of every joint along the chain.
 

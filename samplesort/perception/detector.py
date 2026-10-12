@@ -10,6 +10,8 @@ into table-frame metres and returned as
 from __future__ import annotations
 
 import logging
+import math
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -17,12 +19,27 @@ import numpy as np
 from samplesort.config import SampleSortConfig
 from samplesort.perception.calibration import Calibration
 from samplesort.perception.classifier import ColorClassifier, QRReader
-from samplesort.perception.types import Detection
+from samplesort.perception.types import Detection, FallenTube, Scene
 
 logger = logging.getLogger(__name__)
 
 #: How close a decoded QR code must be to a detection to be attached to it.
 QR_ASSOCIATION_RADIUS_PX = 60.0
+
+
+@dataclass(frozen=True)
+class _Blob:
+    """One class-coloured blob, before it is judged upright or fallen."""
+
+    u: float
+    v: float
+    area: float
+    label: str
+    colour_confidence: float
+    circularity: float
+    aspect: float
+    #: Unit vector along the blob's short side in image coordinates.
+    short_axis: tuple[float, float]
 
 
 class TubeDetector:
@@ -89,18 +106,10 @@ class TubeDetector:
         cap_top = self.config.workspace.tube.total_height
         return self.calibration.pixel_to_table(u, v, object_height=cap_top)
 
-    def detect(self, frame: np.ndarray) -> list[Detection]:
-        """Find every tube cap in a frame.
-
-        Args:
-            frame: A BGR ``uint8`` overhead image.
-
-        Returns:
-            Detections sorted by descending confidence. Blobs below the
-            configured area, circularity or confidence thresholds are dropped.
-        """
+    def _blobs(self, frame: np.ndarray) -> list[_Blob]:
+        """Every class-coloured blob that passes the area and colour checks."""
         hsv = self.preprocess(frame)
-        detections: list[Detection] = []
+        blobs: list[_Blob] = []
 
         for cls in self.config.classes.classes:
             mask = self._clean(self.classifier.class_mask(hsv, cls))
@@ -128,25 +137,133 @@ class TubeDetector:
                     # it; let the other class's own pass claim it instead.
                     continue
 
-                # Caps are circular from overhead, so shape is real evidence.
-                confidence = float(colour_confidence * self._circularity(contour))
-                if confidence < self.tuning.min_confidence:
-                    continue
-
-                detections.append(
-                    Detection(
-                        pixel_xy=(u, v),
-                        table_xy=self._to_table(u, v),
-                        class_label=label,
-                        confidence=confidence,
-                        area_px=area,
+                (_, _), (width, height), angle = cv2.minAreaRect(contour)
+                long_side, short_side = max(width, height), max(min(width, height), 1e-6)
+                corners = cv2.boxPoints(((u, v), (width, height), angle))
+                edge_a, edge_b = corners[1] - corners[0], corners[2] - corners[1]
+                short_edge = edge_a if np.linalg.norm(edge_a) < np.linalg.norm(edge_b) else edge_b
+                short_axis = short_edge / max(float(np.linalg.norm(short_edge)), 1e-9)
+                blobs.append(
+                    _Blob(
+                        u=u,
+                        v=v,
+                        area=area,
+                        label=label,
+                        colour_confidence=float(colour_confidence),
+                        circularity=self._circularity(contour),
+                        aspect=float(long_side / short_side),
+                        short_axis=(float(short_axis[0]), float(short_axis[1])),
                     )
                 )
+        return blobs
 
+    def _is_fallen(self, blob: _Blob) -> bool:
+        """An upright cap is a disc from above; a fallen one shows its side."""
+        return blob.aspect >= self.tuning.fallen_aspect_min
+
+    def _upright_from(self, frame: np.ndarray, blobs: list[_Blob]) -> list[Detection]:
+        detections: list[Detection] = []
+        for blob in blobs:
+            if self._is_fallen(blob):
+                continue
+            # Caps are circular from overhead, so shape is real evidence.
+            confidence = float(blob.colour_confidence * blob.circularity)
+            if confidence < self.tuning.min_confidence:
+                continue
+            detections.append(
+                Detection(
+                    pixel_xy=(blob.u, blob.v),
+                    table_xy=self._to_table(blob.u, blob.v),
+                    class_label=blob.label,
+                    confidence=confidence,
+                    area_px=blob.area,
+                )
+            )
         detections = self._attach_sample_ids(frame, detections)
         detections.sort(key=lambda d: d.confidence, reverse=True)
+        return detections
+
+    def _fallen_from(self, blobs: list[_Blob]) -> list[FallenTube]:
+        fallen: list[FallenTube] = []
+        lying_height = self.config.workspace.tube.cap_radius
+        for blob in blobs:
+            if not self._is_fallen(blob) or blob.colour_confidence < self.tuning.min_confidence:
+                continue
+            table_xy = (float("nan"), float("nan"))
+            axis_yaw = float("nan")
+            if self.calibration is not None:
+                table_xy = self.calibration.pixel_to_table(
+                    blob.u, blob.v, object_height=lying_height
+                )
+                # Map a short step along the image axis to get the table direction.
+                du, dv = blob.short_axis
+                ahead = self.calibration.pixel_to_table(
+                    blob.u + du * 6.0, blob.v + dv * 6.0, object_height=lying_height
+                )
+                axis_yaw = math.atan2(ahead[1] - table_xy[1], ahead[0] - table_xy[0])
+            fallen.append(
+                FallenTube(
+                    pixel_xy=(blob.u, blob.v),
+                    table_xy=table_xy,
+                    class_label=blob.label,
+                    axis_yaw=axis_yaw,
+                    confidence=blob.colour_confidence,
+                    area_px=blob.area,
+                )
+            )
+        fallen.sort(key=lambda f: f.confidence, reverse=True)
+        return fallen
+
+    def detect(self, frame: np.ndarray) -> list[Detection]:
+        """Find every upright tube cap in a frame.
+
+        Args:
+            frame: A BGR ``uint8`` overhead image.
+
+        Returns:
+            Detections sorted by descending confidence. Blobs below the
+            configured area, circularity or confidence thresholds are dropped,
+            and so are side-on caps of fallen tubes (see :meth:`detect_fallen`).
+        """
+        detections = self._upright_from(frame, self._blobs(frame))
         logger.debug("detected %d tubes", len(detections))
         return detections
+
+    def detect_fallen(self, frame: np.ndarray) -> list[FallenTube]:
+        """Find tubes lying on their side.
+
+        Args:
+            frame: A BGR ``uint8`` overhead image.
+
+        Returns:
+            Fallen tubes sorted by descending confidence.
+        """
+        return self._fallen_from(self._blobs(frame))
+
+    def detect_scene(self, frame: np.ndarray) -> Scene:
+        """Upright and fallen tubes from one pass over a frame, filtered to the work area.
+
+        Upright tubes count when they are in the pickup zone or at the righting
+        station, where a righted tube waits to be sorted. Fallen tubes count in
+        the pickup zone and at the station (a tube left lying there blocks it).
+        """
+        blobs = self._blobs(frame)
+        ws = self.config.workspace
+
+        def in_area(xy: tuple[float, float], margin: float = 0.0) -> bool:
+            x, y = xy
+            if not (np.isfinite(x) and np.isfinite(y)):
+                return False
+            return ws.pickup_zone.contains(x, y, margin=margin) or ws.near_righting_station(x, y)
+
+        # A tube that falls over at the zone's edge can leave its cap up to one
+        # tube length outside it (measured: a cap 4 mm past the edge was dropped
+        # before this margin existed).
+        fallen_margin = ws.tube.total_height
+        return Scene(
+            upright=[d for d in self._upright_from(frame, blobs) if in_area(d.table_xy)],
+            fallen=[f for f in self._fallen_from(blobs) if in_area(f.table_xy, fallen_margin)],
+        )
 
     def _attach_sample_ids(self, frame: np.ndarray, detections: list[Detection]) -> list[Detection]:
         """Pair decoded QR codes with their nearest detection, when enabled."""

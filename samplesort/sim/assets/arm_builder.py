@@ -131,7 +131,9 @@ def build_arm_urdf(config: ArmConfig) -> str:
         parts.append(_revolute_joint(joint, parent, child, origin, "0 -1 0", *limits[joint]))
 
     # Tool frame: origin at the TCP, rotating about the tool axis.
-    parts.append(_box_link("tool_link", (0.012, 0.030, 0.030), "0 0 0", "0.20 0.22 0.25 1.0", 0.05))
+    parts.append(
+        _box_link("tool_link", (grip.palm_depth, 0.030, 0.030), "0 0 0", "0.20 0.22 0.25 1.0", 0.05)
+    )
     parts.append(
         _revolute_joint(
             wrist_roll, "wrist_link", "tool_link", f"{l3:.6f} 0 0", "1 0 0", *limits[wrist_roll]

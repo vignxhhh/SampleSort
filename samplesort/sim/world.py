@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -496,6 +497,22 @@ class SimWorld:
         tube_axis = rotation @ np.array([0.0, 0.0, 1.0])
         tilt = np.degrees(np.arccos(np.clip(abs(float(tube_axis[2])), -1.0, 1.0)))
         return bool(tilt <= max_tilt_deg)
+
+    def knock_over(self, body_id: int, axis_yaw: float) -> None:
+        """Lay a tube on its side where it stands, for tests and demonstrations.
+
+        Args:
+            body_id: The tube to tip over.
+            axis_yaw: Direction, in the table plane, from the tube's base to its cap.
+        """
+        x, y = self.tube_xy(body_id)
+        # Pitching by +pi/2 turns the tube's axis (+Z) onto +X; the yaw then
+        # points it along axis_yaw.
+        orientation = self.bullet.getQuaternionFromEuler([0.0, math.pi / 2.0, axis_yaw])
+        resting = self.config.workspace.table_height + self.config.workspace.tube.cap_radius + 0.002
+        self.bullet.resetBasePositionAndOrientation(body_id, [x, y, resting], orientation)
+        self.bullet.resetBaseVelocity(body_id, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0])
+        self.step(self.config.pipeline.settle_steps * 4)
 
     def tube_cap_position(self, body_id: int) -> np.ndarray:
         """Return the XYZ centre of a tube's coloured cap in the world frame."""
