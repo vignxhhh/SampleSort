@@ -14,8 +14,10 @@ docs/web/
 ├── data/wrist_scan.png/.json  the wrist camera's view of a QR-labelled cap
 ├── data/lighting.jpg          one test layout under the 11 lighting conditions
 ├── data/detector_study.json   output of `samplesort detector-study`
+├── data/gallery/              stills of real moments from the two runs, plus captions
 ├── export_run.py              regenerates the run files from a live simulation
 ├── export_assets.py           regenerates the images and copies the study
+├── export_gallery.py          renders the gallery stills from live runs
 ├── verify_kinematics.mjs      checks the JS joint hierarchy against Python's FK
 ├── record_gif.mjs             records ../demo.gif from the page, headlessly
 └── make_gif.py                assembles the recorded frames into the GIF
@@ -35,7 +37,9 @@ python -m http.server 8000 --directory docs/web
 
 | Section | Contents |
 | --- | --- |
+| About | What the project is, why it matters, and a real-lab walkthrough mapping cap colours to tube types |
 | Live run | WebGL replay with orbit and scrub; switch between the clean and the recovery run; event log with sample IDs, missed grasps, retries and righting |
+| Gallery | Eight stills of real moments, with a full-screen viewer |
 | Capabilities | The wrist camera's QR read, righting, retries, the lighting result and the live kinematics check, each linked to the moment in the replay |
 | Lighting study | Every condition's frame, and per-detector scores (HSV, HSV + gray-world, learned CNN), with held-out conditions marked |
 | Perception lab | The HSV → open → contour → area chain re-run live against the real overhead frame |
@@ -73,7 +77,15 @@ python docs/web/export_run.py nominal     # data/run.json, seed 42
 python docs/web/export_run.py recovery    # data/run_recovery.json, seed 3
 samplesort detector-study                 # needs the learning extra
 python docs/web/export_assets.py outputs  # images + study results
+python docs/web/export_gallery.py         # gallery stills (about a minute)
 ```
+
+The gallery exporter snapshots the simulator state at each moment and renders the
+snapshots after the run has finished. Rendering mid-run perturbs PyBullet's
+collision bookkeeping enough to change how a run unfolds, so the stills would
+otherwise not show the same run the replay does.
+
+The page has light, dark and match-system themes; the 3D view follows the theme.
 
 Runs are sampled every 20th physics step (240 Hz → 12 Hz). Re-run
 `verify_kinematics.mjs` afterwards — a regression in the kinematics or a change

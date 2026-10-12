@@ -11,7 +11,7 @@
 <style>
   :root {
     --bg:#f6f7f9; --bg-2:#eef0f4; --panel:#ffffff; --panel-2:#f7f8fa; --panel-3:#eef1f5;
-    --stage:#0b0e14;
+    --stage:#dfe4ec; --term:#0b0e14;
     --ink:#0b0d12; --ink-2:#4a5160; --ink-3:#8a91a0;
     --line:rgba(11,13,18,.09); --line-2:rgba(11,13,18,.16);
     --a1:#5b5bf6; --a2:#1fa8e0; --a3:#14b98a;
@@ -31,7 +31,7 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg:#06070a; --bg-2:#0b0d12; --panel:#0e1117; --panel-2:#131720; --panel-3:#191e29;
-      --stage:#07090d;
+      --stage:#07090d; --term:#07090d;
       --ink:#eef0f5; --ink-2:#a3aaba; --ink-3:#6b7384;
       --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.14);
       --accent:#8b8cff; --accent-ink:#0b0d12; --accent-soft:rgba(139,140,255,.12);
@@ -47,7 +47,7 @@
   }
   :root[data-theme="dark"] {
     --bg:#06070a; --bg-2:#0b0d12; --panel:#0e1117; --panel-2:#131720; --panel-3:#191e29;
-    --stage:#07090d;
+    --stage:#07090d; --term:#07090d;
     --ink:#eef0f5; --ink-2:#a3aaba; --ink-3:#6b7384;
     --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.14);
     --accent:#8b8cff; --accent-ink:#0b0d12; --accent-soft:rgba(139,140,255,.12);
@@ -116,6 +116,15 @@
   .btn.primary:hover { background:color-mix(in srgb, var(--ink) 86%, var(--accent)); }
   .btn.sm { padding:6px 12px; font-size:13px; border-radius:9px; }
   .btn svg { width:15px; height:15px; }
+
+  .themeswitch { display:inline-flex; padding:3px; gap:2px; border-radius:11px; background:var(--panel-3); border:1px solid var(--line); }
+  .themeswitch button {
+    width:30px; height:28px; display:grid; place-items:center; border:0; border-radius:8px; cursor:pointer;
+    background:transparent; color:var(--ink-3); transition:background .15s, color .15s;
+  }
+  .themeswitch button:hover { color:var(--ink); }
+  .themeswitch button[aria-checked="true"] { background:var(--panel); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12), 0 0 0 1px var(--line); }
+  .themeswitch svg { width:15px; height:15px; }
 
   /* ----------------------------------------------------------- hero */
   .hero { position:relative; padding:84px 0 40px; text-align:center; isolation:isolate; }
@@ -421,6 +430,80 @@
   .maptip { font-size:13px; color:var(--ink-2); padding:0 18px 16px; min-height:62px; }
   .maptip b { color:var(--ink); }
 
+  /* -------------------------------------------------------------- about */
+  .aboutgrid { display:grid; grid-template-columns:minmax(0, 1.1fr) minmax(0, 1fr); gap:40px; align-items:start; }
+  .abouttext h3 { font-size:17px; font-weight:600; letter-spacing:-.015em; margin:26px 0 8px; }
+  .abouttext h3:first-child { margin-top:0; }
+  .abouttext p { color:var(--ink-2); max-width:62ch; }
+  .pillars { list-style:none; padding:0; margin:26px 0 0; display:grid; gap:10px; }
+  .pillars li { padding:12px 14px; border-radius:12px; background:var(--panel); border:1px solid var(--line); color:var(--ink-2); font-size:14.5px; }
+  .pillars b { color:var(--ink); font-weight:600; }
+  .aboutfig { margin:0; position:sticky; top:84px; }
+  .aboutfig img, .gitem img { display:block; width:100%; height:auto; }
+  .aboutfig .gbtn { border-radius:var(--r); box-shadow:var(--shadow-lg); }
+  .aboutfig figcaption { font-size:13.5px; color:var(--ink-3); margin-top:12px; }
+  .specs { display:grid; grid-template-columns:1fr 1fr; gap:1px; margin:16px 0 0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--line); }
+  .specs div { background:var(--panel); padding:10px 12px; }
+  .specs dt { font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); }
+  .specs dd { margin:2px 0 0; font-size:14px; font-weight:500; }
+  .example { margin-top:48px; padding:28px; }
+  .exhead { max-width:68ch; }
+  .exhead h3 { font-size:22px; letter-spacing:-.02em; font-weight:600; margin:8px 0 6px; }
+  .exhead p { color:var(--ink-2); }
+  .tag { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+  .timeline { list-style:none; padding:0; margin:24px 0 8px; display:grid; gap:0; position:relative; }
+  .timeline li { display:grid; grid-template-columns:88px minmax(0,1fr); gap:16px; padding:12px 0; position:relative; }
+  .timeline li::before { content:""; position:absolute; left:97px; top:20px; width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); }
+  .timeline li::after { content:""; position:absolute; left:101px; top:32px; bottom:-12px; width:1px; background:var(--line-2); }
+  .timeline li:last-child::after { display:none; }
+  .timeline li > div { padding-left:26px; color:var(--ink-2); }
+  .timeline b { color:var(--ink); font-weight:600; }
+  .tl-t { font-family:var(--mono); font-size:12.5px; color:var(--ink-3); padding-top:2px; text-align:right; }
+  .tablewrap { overflow-x:auto; margin-top:18px; border:1px solid var(--line); border-radius:12px; }
+  .maptable { min-width:620px; }
+  table.t.maptable td { font-family:var(--sans); font-size:14px; }
+  table.t.maptable td:last-child { font-family:var(--mono); font-weight:500; }
+  .maptable th { background:var(--panel-2); }
+  .cap { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; vertical-align:-1px; box-shadow:0 0 0 1px rgba(0,0,0,.15) inset; }
+  .guide { margin-top:48px; }
+  .guide h3 { font-size:17px; font-weight:600; margin-bottom:14px; }
+  .guidegrid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; }
+  .guidegrid a {
+    display:grid; gap:4px; padding:14px 16px; border-radius:12px; text-decoration:none; color:var(--ink-2);
+    background:var(--panel); border:1px solid var(--line); font-size:13.5px; transition:border-color .15s, transform .15s;
+  }
+  .guidegrid a:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .guidegrid b { color:var(--ink); font-weight:600; font-size:14.5px; }
+
+  /* ------------------------------------------------------------ gallery */
+  .ggrid { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:28px 16px; }
+  .gitem { margin:0; display:flex; flex-direction:column; gap:10px; min-width:0; grid-column:span 2; }
+  .gitem.big { grid-column:span 3; }
+  .gbtn {
+    display:block; width:100%; padding:0; border:1px solid var(--line); border-radius:14px; overflow:hidden; cursor:zoom-in;
+    background:var(--panel-3); box-shadow:var(--shadow);
+  }
+  .gbtn img { transition:transform .5s cubic-bezier(.2,.8,.2,1); }
+  .gitem .gbtn img { aspect-ratio:16/10; object-fit:cover; }
+  .gbtn:hover img { transform:scale(1.03); }
+  .gitem figcaption { font-size:13.5px; color:var(--ink-3); line-height:1.5; }
+  .gitem figcaption b { color:var(--ink); font-weight:600; display:block; font-size:14.5px; margin-bottom:2px; }
+  .lightbox {
+    position:fixed; inset:0; z-index:100; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:12px;
+    padding:max(16px, env(safe-area-inset-top, 0px)) 16px; background:rgba(4,6,10,.88); backdrop-filter:blur(8px);
+  }
+  .lightbox[hidden] { display:none !important; }
+  .lightbox figure { margin:0; display:grid; gap:12px; justify-items:center; max-height:100%; }
+  .lightbox img { max-width:100%; max-height:78vh; border-radius:12px; box-shadow:0 30px 80px -20px rgba(0,0,0,.8); }
+  .lightbox figcaption { color:#d7dce6; font-size:14.5px; max-width:72ch; text-align:center; }
+  .lightbox figcaption b { color:#fff; }
+  .lbnav, .lbclose {
+    border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.08); color:#fff; cursor:pointer;
+    width:44px; height:44px; border-radius:50%; font-size:26px; line-height:1; display:grid; place-items:center;
+  }
+  .lbnav:hover, .lbclose:hover { background:rgba(255,255,255,.18); }
+  .lbclose { position:absolute; top:max(16px, env(safe-area-inset-top, 0px)); right:16px; }
+
   /* ------------------------------------------------------------- limits */
   .limits { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
   .limit { padding:20px; }
@@ -435,7 +518,7 @@
     border-bottom:2px solid transparent; margin-bottom:-1px;
   }
   .termtabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); }
-  .termbody { position:relative; background:var(--stage); color:#d4d9e4; margin:0; padding:20px 22px; font-family:var(--mono); font-size:13px; line-height:1.85; overflow-x:auto; white-space:pre; }
+  .termbody { position:relative; background:var(--term); color:#d4d9e4; margin:0; padding:20px 22px; font-family:var(--mono); font-size:13px; line-height:1.85; overflow-x:auto; white-space:pre; }
   .termbody .c { color:#6b7590; } .termbody .p { color:#7dd3fc; }
   .copy { position:absolute; top:58px; right:12px; }
   .copy.done { color:var(--good); }
@@ -458,6 +541,11 @@
     .span-3, .span-2, .span-4 { grid-column:span 2; }
     .limits { grid-template-columns:1fr 1fr; }
     .navlinks { display:none; }
+    .aboutgrid { grid-template-columns:1fr; }
+    .aboutfig { position:static; }
+    .guidegrid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .ggrid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .gitem, .gitem.big { grid-column:span 1; }
   }
   @media (max-width: 640px) {
     .hero { padding-top:56px; }
@@ -474,6 +562,17 @@
     .verify { margin-left:0; }
     .navright .btn { display:none; }
     .mb { grid-template-columns:96px minmax(0,1fr) 42px; }
+    .ggrid { grid-template-columns:1fr; }
+    .gitem, .gitem.big { grid-column:auto; }
+    .guidegrid { grid-template-columns:1fr; }
+    .example { padding:20px 16px; }
+    .timeline li { grid-template-columns:1fr; gap:2px; padding-left:26px; }
+    .timeline li::before { left:0; top:18px; }
+    .timeline li::after { left:4px; top:30px; }
+    .timeline li > div { padding-left:0; }
+    .tl-t { text-align:left; }
+    .lightbox { grid-template-columns:1fr; }
+    .lbnav { display:none; }
     .seg button em { display:none; }
     .cbar .seg { max-width:100%; overflow-x:auto; }
     .hud { display:none; }
@@ -494,17 +593,26 @@
   <div class="wrap">
     <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>SampleSort</a>
     <div class="navlinks">
+      <a href="#about">About</a>
       <a href="#run">Live run</a>
+      <a href="#gallery">Gallery</a>
       <a href="#capabilities">Capabilities</a>
-      <a href="#lighting">Lighting study</a>
-      <a href="#perception">Perception</a>
+      <a href="#lighting">Lighting</a>
       <a href="#how">How it works</a>
       <a href="#start">Get started</a>
     </div>
     <div class="navright">
-      <button class="iconbtn" id="themebtn" aria-label="Toggle colour theme" title="Toggle theme">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-      </button>
+      <div class="themeswitch" role="radiogroup" aria-label="Colour theme" id="themeswitch">
+        <button role="radio" data-theme-choice="light" aria-checked="false" title="Light theme" aria-label="Light theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+        </button>
+        <button role="radio" data-theme-choice="system" aria-checked="true" title="Match your system" aria-label="Match system theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+        </button>
+        <button role="radio" data-theme-choice="dark" aria-checked="false" title="Dark theme" aria-label="Dark theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+      </div>
       <a class="btn sm" href="https://github.com/vignxhhh/SampleSort">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 12 .5z"/></svg>
         GitHub
@@ -606,6 +714,175 @@
 </header>
 
 <main>
+  <!-- ===================== about ===================== -->
+  <section class="block" id="about">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="kicker">About</div>
+        <h2 class="h2">A robot for the least glamorous job in the lab.</h2>
+        <p class="sub">Before a blood sample is analysed, someone has to sort it. SampleSort is an open-source
+          attempt to hand that job to a small, inexpensive robot arm and a camera, and to be completely
+          open about how well it works.</p>
+      </div>
+      <div class="aboutgrid">
+        <div class="abouttext reveal">
+          <h3>What it is</h3>
+          <p>SampleSort is the software for a five-axis robot arm that sorts capped sample tubes. A camera above
+            the bench finds every tube and works out what kind it is from the colour of its cap. A second camera
+            on the wrist reads each tube's ID label. The arm then moves each tube into the rack where that kind
+            belongs, and every attempt is written to a log that can be audited later.</p>
+          <h3>Where it runs today</h3>
+          <p>Everything on this page comes from a physics simulation (PyBullet) of the low-cost SO-101 arm. The
+            same code also has a path to the physical arm and USB cameras. That path is tested against
+            stand-ins but has not yet driven a real arm.</p>
+          <h3>Why it matters</h3>
+          <p>Hospital and research labs receive tubes in mixed batches from wards, clinics and couriers. Sorting
+            them happens in the <em>pre-analytical</em> stage, which is where most laboratory errors are reported
+            to start: wrong rack, wrong order, a missing ID. Large hospital labs use conveyor-based automation for
+            this. Smaller labs and research groups usually sort by hand. SampleSort explores how much of that
+            work a desktop arm and a webcam can do reliably.</p>
+          <ul class="pillars">
+            <li><b>Shows its work.</b> The 3D replay is the simulator's own recorded trajectory, and the page
+              checks its kinematics against the Python code on every frame.</li>
+            <li><b>Measured, failures included.</b> Benchmarks report misses, retries and the conditions where
+              it breaks, alongside the successes.</li>
+            <li><b>Runs on a laptop.</b> <code class="mono">pip install</code>, no GPU, no robot needed, and about
+              a minute to a first sorted tray.</li>
+          </ul>
+        </div>
+        <figure class="aboutfig reveal">
+          <button class="gbtn" data-g="0" aria-label="Enlarge: the cell before a run">
+            <img src="data/gallery/overview.jpg" alt="The simulated cell: robot arm, eight capped tubes and three racks" width="1600" height="1000">
+          </button>
+          <figcaption>The simulated cell: an SO-101 arm, a pickup zone of capped tubes, three destination racks and
+            a righting station for tubes that fall over.</figcaption>
+          <dl class="specs">
+            <div><dt>Arm</dt><dd>SO-101, 5 axes + gripper</dd></div>
+            <div><dt>Reach</dt><dd>350&nbsp;mm</dd></div>
+            <div><dt>Tubes</dt><dd>40&nbsp;mm body, 12&nbsp;mm cap</dd></div>
+            <div><dt>Cameras</dt><dd>overhead 640&times;480, wrist 640&times;640</dd></div>
+          </dl>
+        </figure>
+      </div>
+
+      <div class="card example reveal" id="example">
+        <div class="exhead">
+          <span class="tag">Real-world example</span>
+          <h3>A morning at specimen reception</h3>
+          <p>An illustration of where a system like this fits. The steps are what the simulation does; the lab
+            context around them is how a typical hospital lab works.</p>
+        </div>
+        <ol class="timeline">
+          <li><span class="tl-t">08:40</span><div><b>A tray arrives.</b> A courier brings a tray of mixed tubes
+            from the morning ward round. It goes on the bench in the pickup zone.</div></li>
+          <li><span class="tl-t">08:40:05</span><div><b>The camera surveys it.</b> Every cap is found, classified
+            by colour and located to about a millimetre. Two tubes that tipped over in transit are recognised
+            from the outline of their caps.</div></li>
+          <li><span class="tl-t">08:40:08</span><div><b>Each tube is identified.</b> Just before each grasp, the
+            wrist camera reads the tube's ID label, so the record ties the physical tube to the patient sample.</div></li>
+          <li><span class="tl-t">08:40:10</span><div><b>Tubes go to their racks.</b> Light-blue coagulation tubes
+            go to their own rack, which a real lab would send on first: some clotting tests have to be run
+            within a few hours of the draw.</div></li>
+          <li><span class="tl-t">08:41</span><div><b>Problems are handled, not hidden.</b> A missed grasp is
+            noticed and retried after a fresh look. The fallen tubes are stood back up, then sorted.</div></li>
+          <li><span class="tl-t">08:42</span><div><b>The tray is empty, and the log is complete.</b> Every tube
+            has a row: its ID, type, rack and slot, the time, and any failure on the way. That is the
+            chain-of-custody record an accredited lab has to keep.</div></li>
+        </ol>
+        <div class="tablewrap">
+          <table class="t maptable">
+            <thead><tr><th>Cap in the simulation</th><th>Real tube it stands for</th><th>Additive</th><th>Typical use</th><th>Rack</th></tr></thead>
+            <tbody>
+              <tr><td><span class="cap" style="background:#d64545"></span>red</td><td>Red top (serum)</td><td>None / clot activator</td><td>Serology, some chemistry</td><td>A</td></tr>
+              <tr><td><span class="cap" style="background:#4472d6"></span>blue</td><td>Light-blue top</td><td>Sodium citrate</td><td>Coagulation (PT/INR, aPTT)</td><td>B</td></tr>
+              <tr><td><span class="cap" style="background:#4aa35a"></span>green</td><td>Green top</td><td>Lithium heparin</td><td>Plasma chemistry</td><td>C</td></tr>
+              <tr><td><span class="cap" style="background:#d6c045"></span>yellow</td><td>Gold top (SST)</td><td>Clot activator + gel</td><td>Serum chemistry</td><td>C</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">The colours follow a widely used tube-manufacturer convention, but conventions vary between
+          manufacturers and labs. A real deployment would read the tube type from the barcode as well as the cap.
+          In SampleSort the mapping from colour to rack is one line of configuration per class.</p>
+      </div>
+
+      <div class="guide reveal">
+        <h3>What's on this page</h3>
+        <div class="guidegrid">
+          <a href="#run"><b>Live run</b><span>Replay two real runs in 3D: a clean one, and one with injected errors and fallen tubes.</span></a>
+          <a href="#gallery"><b>Gallery</b><span>Stills of key moments, rendered from the simulator's own state.</span></a>
+          <a href="#capabilities"><b>Capabilities</b><span>Sample IDs, standing fallen tubes up, retries, and the kinematics check.</span></a>
+          <a href="#lighting"><b>Lighting study</b><span>How three detectors cope with eleven lighting conditions.</span></a>
+          <a href="#perception"><b>Perception lab</b><span>Tune the colour detector yourself on the real camera frame.</span></a>
+          <a href="#robustness"><b>Robustness</b><span>What happens as position error grows from 0 to 20&nbsp;mm.</span></a>
+          <a href="#how"><b>How it works</b><span>The six stages from camera to log, and a live map of the bench.</span></a>
+          <a href="#start"><b>Get started</b><span>Install and run it yourself in about a minute.</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== gallery ===================== -->
+  <section class="block" id="gallery">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="kicker">Gallery</div>
+        <h2 class="h2">Real moments from real runs.</h2>
+        <p class="sub">Each picture is a moment from an actual run, snapshotted as it happened and rendered from
+          the simulator's own state. Nothing is posed or retouched. Select any image to enlarge it.</p>
+      </div>
+      <div class="ggrid">
+          <figure class="gitem big">
+            <button class="gbtn" data-g="0" aria-label="Enlarge: Before the run">
+              <img src="data/gallery/overview.jpg" alt="The cell before a run: eight capped tubes in the pickup zone, three racks, the arm folded back so the overhead camera has a clear view." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Before the run</b> The cell before a run: eight capped tubes in the pickup zone, three racks, the arm folded back so the overhead camera has a clear view.</figcaption>
+          </figure>
+          <figure class="gitem big">
+            <button class="gbtn" data-g="1" aria-label="Enlarge: After the run">
+              <img src="data/gallery/sorted.jpg" alt="The same bench after the run: every tube in the rack its cap colour belongs to, and one row per tube in the sort log." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>After the run</b> The same bench after the run: every tube in the rack its cap colour belongs to, and one row per tube in the sort log.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="2" aria-label="Enlarge: Knocked over">
+              <img src="data/gallery/fallen.jpg" alt="A harder start: two tubes knocked over. The overhead camera tells them apart from standing ones by the outline of the cap." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Knocked over</b> A harder start: two tubes knocked over. The overhead camera tells them apart from standing ones by the outline of the cap.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="3" aria-label="Enlarge: Grasp">
+              <img src="data/gallery/grasp.jpg" alt="The gripper closing on a cap. The wrist camera read this tube&#x27;s QR label a moment earlier, from 7 cm above it." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Grasp</b> The gripper closing on a cap. The wrist camera read this tube&#x27;s QR label a moment earlier, from 7 cm above it.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="4" aria-label="Enlarge: Carry">
+              <img src="data/gallery/carry.jpg" alt="Carrying a tube to its rack. Each move is a waypoint solved exactly by closed-form inverse kinematics." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Carry</b> Carrying a tube to its rack. Each move is a waypoint solved exactly by closed-form inverse kinematics.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="5" aria-label="Enlarge: What the camera sees">
+              <img src="data/gallery/overhead.jpg" alt="What the overhead camera sees, with the detector&#x27;s output: every cap found, classified by colour and located on the bench to about a millimetre." width="1076" height="500" loading="lazy">
+            </button>
+            <figcaption><b>What the camera sees</b> What the overhead camera sees, with the detector&#x27;s output: every cap found, classified by colour and located on the bench to about a millimetre.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="6" aria-label="Enlarge: Which end is the body?">
+              <img src="data/gallery/inspect.jpg" alt="A fallen tube held level over clear table, so the overhead camera can see which end is the body before it is stood up." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Which end is the body?</b> A fallen tube held level over clear table, so the overhead camera can see which end is the body before it is stood up.</figcaption>
+          </figure>
+          <figure class="gitem">
+            <button class="gbtn" data-g="7" aria-label="Enlarge: Stood back up">
+              <img src="data/gallery/righted.jpg" alt="Stood back up at the righting station, cap on top. From here it is sorted like any other tube." width="1600" height="1000" loading="lazy">
+            </button>
+            <figcaption><b>Stood back up</b> Stood back up at the righting station, cap on top. From here it is sorted like any other tube.</figcaption>
+          </figure>
+      </div>
+    </div>
+  </section>
+
   <!-- ===================== capabilities ===================== -->
   <section class="block" id="capabilities">
     <div class="wrap">
@@ -837,6 +1114,17 @@
   </div>
 </footer>
 
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lbclose" id="lbclose" aria-label="Close">&times;</button>
+  <button class="lbnav prev" id="lbprev" aria-label="Previous image">&#8249;</button>
+  <figure>
+    <img id="lbimg" alt="">
+    <figcaption id="lbcap"></figcaption>
+  </figure>
+  <button class="lbnav next" id="lbnext" aria-label="Next image">&#8250;</button>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -846,17 +1134,21 @@
 
   /* ============================== theme ============================== */
   const root = document.documentElement;
-  try {
-    const saved = localStorage.getItem("ss-theme");
-    if (saved === "dark" || saved === "light") root.setAttribute("data-theme", saved);
-  } catch (e) { /* storage blocked: the system theme applies */ }
-  $("themebtn").addEventListener("click", () => {
-    const dark = root.getAttribute("data-theme") === "dark" ||
-      (!root.hasAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-    const next = dark ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    try { localStorage.setItem("ss-theme", next); } catch (e) { /* ignore */ }
-  });
+  function applyTheme(choice) {
+    if (choice === "light" || choice === "dark") root.setAttribute("data-theme", choice);
+    else root.removeAttribute("data-theme");
+    document.querySelectorAll("[data-theme-choice]").forEach(b =>
+      b.setAttribute("aria-checked", String(b.dataset.themeChoice === choice)));
+    if (window.__onTheme) window.__onTheme();
+  }
+  let savedTheme = "system";
+  try { savedTheme = localStorage.getItem("ss-theme") || "system"; } catch (e) { /* storage blocked */ }
+  applyTheme(savedTheme);
+  document.querySelectorAll("[data-theme-choice]").forEach(b => b.addEventListener("click", () => {
+    applyTheme(b.dataset.themeChoice);
+    try { localStorage.setItem("ss-theme", b.dataset.themeChoice); } catch (e) { /* ignore */ }
+  }));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (window.__onTheme) window.__onTheme(); });
 
   /* ============================ nav + reveal ========================== */
   const nav = $("nav");
@@ -873,7 +1165,7 @@
       navLinks.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
     });
   }, { rootMargin: "-45% 0px -50% 0px" });
-  ["run", "capabilities", "lighting", "perception", "how", "start"].forEach(id => $(id) && secIO.observe($(id)));
+  ["about", "run", "gallery", "capabilities", "lighting", "how", "start"].forEach(id => $(id) && secIO.observe($(id)));
 
   /* ============================== count-up ============================ */
   function countUp(el) {
@@ -1071,11 +1363,26 @@
   const show = { trail: true, zone: true, shadow: true };
   let trail = [], statics = null, userTouched = false;
   const COL = {
+    // floor is replaced from the theme by readStage()
     floor: [0.05, 0.06, 0.08], table: [0.55, 0.57, 0.61], plate: [0.30, 0.32, 0.37], slot: [0.14, 0.15, 0.18],
     base: [0.18, 0.20, 0.25], yaw: [0.26, 0.28, 0.34], upper: [0.42, 0.45, 0.93], fore: [0.36, 0.62, 0.92],
     wrist: [0.52, 0.55, 0.62], tool: [0.15, 0.16, 0.20], finger: [0.10, 0.11, 0.14], glass: [0.82, 0.85, 0.90],
     station: [0.69, 0.59, 0.99],
   };
+  // The 3D stage follows the page theme: its background and floor come from --stage.
+  let STAGE = [0.027, 0.035, 0.05];
+  function readStage() {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--stage").trim();
+    if (/^#[0-9a-f]{6}$/i.test(v)) STAGE = hex2rgb(v);
+    const light = STAGE[0] + STAGE[1] + STAGE[2] > 1.5;
+    COL.floor = light ? STAGE.map(c => c * 0.93) : STAGE.map(c => c * 1.6 + 0.01);
+    COL.table = light ? [0.86, 0.88, 0.92] : [0.55, 0.57, 0.61];
+    COL.plate = light ? [0.60, 0.63, 0.69] : [0.30, 0.32, 0.37];
+    COL.slot = light ? [0.30, 0.32, 0.37] : [0.14, 0.15, 0.18];
+    statics = null;  // rebuild the static meshes with the new colours
+  }
+  window.__onTheme = () => requestAnimationFrame(readStage);
+  readStage();
   function jointChain(q) {
     const [l1, l2, l3] = D.arm.links, h0 = D.arm.base_height, out = {};
     let m = M4.id(); out.base = m;
@@ -1158,7 +1465,7 @@
   function render() {
     if (!D || !gl) return;
     resize();
-    gl.clearColor(0.027, 0.035, 0.05, 1);
+    gl.clearColor(STAGE[0], STAGE[1], STAGE[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const eye = camEye(), target = cam.mode === "top" ? [0.21, 0, 0] : cam.target;
     VP = M4.mul(M4.persp(cam.mode === "top" ? 0.78 : 0.72, canvas.width / canvas.height, 0.02, 12), M4.look(eye, target, [0, 0, 1]));
@@ -1348,7 +1655,7 @@
   document.addEventListener("keydown", e => {
     if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
     const inView = $("run").getBoundingClientRect().bottom > 0 && $("run").getBoundingClientRect().top < innerHeight;
-    if (!D || !inView) return;
+    if (!D || !inView || !document.getElementById("lightbox").hidden) return;
     if (e.code === "Space" && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
     if (e.key === "ArrowRight" && e.target === document.body) { setPlaying(false); setFrame(F + 1, true); }
     if (e.key === "ArrowLeft" && e.target === document.body) { setPlaying(false); setFrame(F - 1, true); }
@@ -1833,6 +2140,34 @@
     mapPath.setAttribute("points", mapPts.join(" "));
   };
 
+
+  /* =================================================================== */
+  /*  gallery lightbox                                                     */
+  /* =================================================================== */
+  const gitems = Array.from(document.querySelectorAll(".ggrid .gitem"));
+  const lb = $("lightbox"), lbimg = $("lbimg"), lbcap = $("lbcap");
+  let lbIndex = 0, lbReturn = null;
+  function lbShow(i) {
+    lbIndex = (i + gitems.length) % gitems.length;
+    const it = gitems[lbIndex], img = it.querySelector("img");
+    lbimg.src = img.src; lbimg.alt = img.alt;
+    lbcap.innerHTML = it.querySelector("figcaption").innerHTML;
+  }
+  function lbOpen(i, from) {
+    lbReturn = from; lbShow(i); lb.hidden = false; document.body.style.overflow = "hidden"; $("lbclose").focus();
+  }
+  function lbClose() { lb.hidden = true; document.body.style.overflow = ""; if (lbReturn) lbReturn.focus(); }
+  document.querySelectorAll(".gbtn").forEach(b => b.addEventListener("click", () => lbOpen(Number(b.dataset.g), b)));
+  $("lbclose").addEventListener("click", lbClose);
+  $("lbprev").addEventListener("click", () => lbShow(lbIndex - 1));
+  $("lbnext").addEventListener("click", () => lbShow(lbIndex + 1));
+  lb.addEventListener("click", e => { if (e.target === lb) lbClose(); });
+  document.addEventListener("keydown", e => {
+    if (lb.hidden) return;
+    if (e.key === "Escape") lbClose();
+    if (e.key === "ArrowRight") lbShow(lbIndex + 1);
+    if (e.key === "ArrowLeft") lbShow(lbIndex - 1);
+  });
   /* =================================================================== */
   /*  get started                                                          */
   /* =================================================================== */
