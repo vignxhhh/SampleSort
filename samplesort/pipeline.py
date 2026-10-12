@@ -219,7 +219,11 @@ class SortPipeline:
         self.controller = controller or ScriptedController(
             config, backend.arm, backend.world, scanner=backend.scanner
         )
-        self._noise_rng = np.random.default_rng(config.seed)
+        # Seeded from the world, not the config: the benchmark builds every trial
+        # from the same config, and a config seed gave every trial the identical
+        # noise sequence, so N trials measured one noise draw N times.
+        world_seed = backend.world.seed if backend.world is not None else config.seed
+        self._noise_rng = np.random.default_rng(world_seed)
         #: Tubes the arm put back down lying because it could not tell which end
         #: was the body. See :meth:`_remember_set_down`.
         self._set_down: list[FallenTube] = []

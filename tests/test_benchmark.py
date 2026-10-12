@@ -257,3 +257,20 @@ def test_localisation_noise_degrades_the_grasp_rate(
     assert noisy.grasp_success_rate < clean.grasp_success_rate
     assert "grasp_missed" in noisy.failures_by_type()
     assert noisy.perception_noise_m > 0.0
+
+
+def test_each_trial_draws_its_own_localisation_noise(config: SampleSortConfig) -> None:
+    """Trials share one config; their noise must still be independent."""
+    from samplesort.hal.factory import build_backend
+    from samplesort.perception.types import Detection
+    from samplesort.pipeline import SortPipeline
+
+    config.pipeline.perception_noise_m = 0.01
+    detection = Detection((0.0, 0.0), (0.19, 0.0), "red", 1.0)
+    offsets = []
+    for seed in (42, 43, 42):
+        backend = build_backend(config, seed=seed)
+        with backend:
+            offsets.append(SortPipeline(config, backend)._jitter(detection).table_xy)
+    assert offsets[0] != offsets[1]
+    assert offsets[0] == offsets[2]
