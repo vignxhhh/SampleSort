@@ -15,6 +15,7 @@ from samplesort.control.scripted import FailureReason, ScriptedController
 from samplesort.hal.factory import build_backend
 from samplesort.logging_db.sort_log import SortLog
 from samplesort.perception.fallen import body_side, body_side_scores
+from samplesort.perception.types import Detection, FallenTube, Scene
 from samplesort.pipeline import SortPipeline
 from samplesort.planning.kinematics import (
     TOP_DOWN_PITCH,
@@ -381,3 +382,56 @@ def test_dry_run_reports_fallen_tubes_without_moving(config: SampleSortConfig) -
         report = SortPipeline(config, backend).run(dry_run=True)
         assert report.rightings == []
         assert not world.tube_is_upright(tube.body_id)
+
+
+# ------------------------------------------------------- pipeline bookkeeping
+
+
+def test_a_tube_the_arm_set_down_lying_stays_fallen(config: SampleSortConfig) -> None:
+    # Measured: a tube put back down unresolved showed a near-round cap and was
+    # then "picked" from above, missing, until the iteration cap.
+    backend = build_backend(config, seed=1)
+    with backend:
+        pipeline = SortPipeline(config, backend)
+        left = FallenTube((300.0, 200.0), (0.20, 0.12), "red", 0.7, 0.9, 150.0)
+        pipeline._set_down.append(left)
+        looks_upright = Detection((301.0, 204.0), (0.201, 0.114), "red", 0.8, 160.0)
+        other = Detection((100.0, 100.0), (0.15, -0.05), "red", 0.8, 160.0)
+        scene = pipeline._remember_set_down(Scene(upright=[looks_upright, other], fallen=[]))
+    assert scene.upright == [other]
+    assert len(scene.fallen) == 1
+    assert scene.fallen[0].axis_yaw == left.axis_yaw
+    assert pipeline._set_down == [left]
+
+
+def test_a_remembered_spot_is_forgotten_once_empty(config: SampleSortConfig) -> None:
+    backend = build_backend(config, seed=1)
+    with backend:
+        pipeline = SortPipeline(config, backend)
+        pipeline._set_down.append(FallenTube((300.0, 200.0), (0.20, 0.12), "red", 0.7, 0.9, 150.0))
+        pipeline._remember_set_down(Scene(upright=[], fallen=[]))
+    assert pipeline._set_down == []
+
+
+def test_a_lying_tube_is_retired_by_its_cap_position(config: SampleSortConfig) -> None:
+    backend = build_backend(config, seed=7)
+    with backend:
+        world = backend.world
+        assert world is not None
+        tube = world.spawn_tubes(1)[0]
+        world.knock_over(tube.body_id, 0.6)
+        cap = np.asarray(world.tube_cap_position(tube.body_id))[:2]
+        base = np.asarray(world.tube_xy(tube.body_id))
+        # A lying cap is detected a few mm beyond its true centre (measured 7 mm),
+        # which put it more than min_separation from the tube's base.
+        pick = cap + (cap - base) / np.linalg.norm(cap - base) * 0.007
+        assert math.dist(base, pick) > config.workspace.tube.min_separation
+        job = PickPlaceJob(
+            class_label=tube.label,
+            pick_xy=(float(pick[0]), float(pick[1])),
+            rack_id="rack_a",
+            slot_index=0,
+            place_xy=(0.1, 0.2),
+        )
+        SortPipeline(config, backend)._mark_unsortable(job)
+        assert world.tubes == []

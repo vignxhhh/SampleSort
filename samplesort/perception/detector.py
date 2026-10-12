@@ -19,52 +19,12 @@ import numpy as np
 from samplesort.config import SampleSortConfig
 from samplesort.perception.calibration import Calibration
 from samplesort.perception.classifier import ColorClassifier, QRReader
-from samplesort.perception.fallen import rack_mask
 from samplesort.perception.types import Detection, FallenTube, Scene
 
 logger = logging.getLogger(__name__)
 
 #: How close a decoded QR code must be to a detection to be attached to it.
 QR_ASSOCIATION_RADIUS_PX = 60.0
-
-
-#: Caps at least this elongated are checked for a body lying beside them.
-_BODY_CHECK_ASPECT_MIN = 1.10
-
-#: Fraction of probe points that must look like tube body for a body to count.
-_BODY_BESIDE_FRACTION = 0.75
-
-
-def _body_like(frame: np.ndarray) -> np.ndarray:
-    """Pixels that could be translucent tube body: unsaturated, unlike the table."""
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).astype(float)
-    table = float(np.median(gray))
-    mask: np.ndarray = (hsv[:, :, 1] < 40) & (np.abs(gray - table) > 10.0)
-    return mask
-
-
-def _body_beside(body_like: np.ndarray, centre: tuple[float, float], cap_width_px: float) -> bool:
-    """Whether a tube body extends straight out from the blob in some direction.
-
-    Probes rays every 10 degrees from 0.6 to 1.8 cap widths out — past the
-    cap's own half-length and within the body's length, so no calibration is
-    needed. All directions are tried because a nearly square outline does not
-    say which way the tube's axis runs.
-    """
-    rows, cols = body_like.shape
-    for angle in np.radians(np.arange(0.0, 360.0, 10.0)):
-        dx, dy = float(np.cos(angle)), float(np.sin(angle))
-        hits = total = 0
-        for k in np.linspace(0.6, 1.8, 9):
-            col = int(round(centre[0] + k * cap_width_px * dx))
-            row = int(round(centre[1] + k * cap_width_px * dy))
-            if 0 <= row < rows and 0 <= col < cols:
-                hits += bool(body_like[row, col])
-                total += 1
-        if total and hits / total >= _BODY_BESIDE_FRACTION:
-            return True
-    return False
 
 
 @dataclass(frozen=True)
@@ -80,8 +40,6 @@ class _Blob:
     aspect: float
     #: Unit vector along the blob's short side in image coordinates.
     short_axis: tuple[float, float]
-    #: Whether a tube body extends from the blob in some direction.
-    body_beside: bool = False
 
 
 class TubeDetector:
@@ -151,12 +109,6 @@ class TubeDetector:
     def _blobs(self, frame: np.ndarray) -> list[_Blob]:
         """Every class-coloured blob that passes the area and colour checks."""
         hsv = self.preprocess(frame)
-        body_like = _body_like(frame)
-        if self.calibration is not None:
-            # Rack plates are grey and holed, like tube body; a standing tube in a
-            # rack near the image edge looks slightly oval and would otherwise
-            # pass for a fallen one.
-            body_like &= ~rack_mask(body_like.shape, self.calibration, self.config.workspace.racks)
         blobs: list[_Blob] = []
 
         for cls in self.config.classes.classes:
@@ -201,22 +153,13 @@ class TubeDetector:
                         circularity=self._circularity(contour),
                         aspect=float(long_side / short_side),
                         short_axis=(float(short_axis[0]), float(short_axis[1])),
-                        body_beside=_body_beside(body_like, (u, v), long_side),
                     )
                 )
         return blobs
 
     def _is_fallen(self, blob: _Blob) -> bool:
-        """An upright cap is a disc from above; a fallen one shows its side.
-
-        The outline alone is marginal for some lying tubes: seen obliquely, one
-        measured 1.22 against a 1.25 threshold. So a slightly elongated cap with
-        a tube body lying beside it along its axis also counts as fallen.
-        Standing caps measured at most 1.06, so the body check never sees them.
-        """
-        if blob.aspect >= self.tuning.fallen_aspect_min:
-            return True
-        return blob.aspect >= _BODY_CHECK_ASPECT_MIN and blob.body_beside
+        """An upright cap is a disc from above; a fallen one shows its side."""
+        return blob.aspect >= self.tuning.fallen_aspect_min
 
     def _upright_from(self, frame: np.ndarray, blobs: list[_Blob]) -> list[Detection]:
         detections: list[Detection] = []

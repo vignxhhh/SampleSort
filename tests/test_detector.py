@@ -14,7 +14,7 @@ from samplesort.hal.sim_camera import SimCamera
 from samplesort.perception.calibration import calibration_from_camera_pose
 from samplesort.perception.detector import TubeDetector
 from samplesort.perception.types import Detection
-from tests.synthetic import CAP_BGR, synth_calibration, synth_frame, table_to_synth_pixel
+from tests.synthetic import CAP_BGR, synth_calibration, synth_frame
 
 
 @pytest.fixture
@@ -187,51 +187,3 @@ def test_sim_detection_is_deterministic(config: SampleSortConfig, backend: Backe
     assert [(d.class_label, d.pixel_xy) for d in first] == [
         (d.class_label, d.pixel_xy) for d in second
     ]
-
-
-# ------------------------------------------------------------ fallen or not
-
-
-def _oval_cap(frame: np.ndarray, centre: tuple[int, int]) -> None:
-    """A slightly oval cap outline (aspect ~1.2), below the plain aspect threshold."""
-    cv2.ellipse(frame, (centre, (22, 18), 30.0), CAP_BGR["red"], -1)
-
-
-def test_a_squarish_cap_with_a_body_beside_it_is_fallen(detector: TubeDetector) -> None:
-    # Measured in sim: a lying tube seen obliquely showed a 1.22 outline, under
-    # the 1.25 threshold, and was taken for a standing one.
-    frame = synth_frame([])
-    centre = (300, 240)
-    direction = np.array([np.cos(np.radians(30.0)), np.sin(np.radians(30.0))])
-    start = np.array(centre) + direction * 12
-    end = np.array(centre) + direction * 50
-    cv2.line(frame, tuple(int(c) for c in start), tuple(int(c) for c in end), (165, 168, 175), 15)
-    _oval_cap(frame, centre)
-    assert len(detector.detect_fallen(frame)) == 1
-    assert detector.detect(frame) == []
-
-
-def test_a_squarish_cap_with_no_body_is_standing(detector: TubeDetector) -> None:
-    frame = synth_frame([])
-    _oval_cap(frame, (300, 240))
-    assert detector.detect_fallen(frame) == []
-    assert len(detector.detect(frame)) == 1
-
-
-def test_an_oval_cap_standing_in_a_rack_is_not_fallen(
-    config: SampleSortConfig, detector: TubeDetector
-) -> None:
-    # The grey, holed rack plate looks like tube body; it must not make a
-    # standing tube at the edge of the view count as fallen.
-    frame = synth_frame([])
-    rack = config.workspace.rack("rack_a")
-    x0, x1, y0, y1 = rack.footprint
-    corners = [table_to_synth_pixel(x, y) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
-    cv2.fillConvexPoly(frame, np.round(np.array(corners)).astype(np.int32), (158, 158, 160))
-    for x, y in rack.slots[1:]:
-        u, v = table_to_synth_pixel(x, y)
-        cv2.circle(frame, (int(u), int(v)), 13, (60, 60, 62), -1)
-    u, v = table_to_synth_pixel(*rack.slots[0])
-    _oval_cap(frame, (int(u), int(v)))
-    assert detector.detect_fallen(frame) == []
-    assert len(detector.detect(frame)) == 1

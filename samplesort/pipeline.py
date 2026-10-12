@@ -14,6 +14,7 @@ sorts it from there like any other tube.
 from __future__ import annotations
 
 import logging
+import math
 import time
 import uuid
 from dataclasses import dataclass, field, replace
@@ -43,6 +44,9 @@ from samplesort.planning.rack_state import RackState
 from samplesort.planning.task_planner import PickPlaceJob, PlanResult, TaskPlanner
 
 logger = logging.getLogger(__name__)
+
+#: How close a detection must be to where the arm left a lying tube to be that tube.
+_SET_DOWN_MATCH_M = 0.02
 
 
 @dataclass
@@ -216,6 +220,9 @@ class SortPipeline:
             config, backend.arm, backend.world, scanner=backend.scanner
         )
         self._noise_rng = np.random.default_rng(config.seed)
+        #: Tubes the arm put back down lying because it could not tell which end
+        #: was the body. See :meth:`_remember_set_down`.
+        self._set_down: list[FallenTube] = []
 
     # ------------------------------------------------------------- calibration
 
@@ -256,8 +263,53 @@ class SortPipeline:
         self.backend.arm.move_to_joints(self.config.arm.observe_position)
         if self.backend.world is not None:
             self.backend.world.step(self.config.pipeline.settle_steps)
-        scene = self.detector.detect_scene(self.backend.camera.read())
+        scene = self._remember_set_down(self.detector.detect_scene(self.backend.camera.read()))
         return Scene(upright=[self._jitter(d) for d in scene.upright], fallen=scene.fallen)
+
+    def _remember_set_down(self, scene: Scene) -> Scene:
+        """Keep treating a tube the arm put back down lying as fallen.
+
+        A lying tube can show a nearly round cap outline from some angles
+        (measured: aspect 1.22 against a 1.25 threshold), and a tube the arm
+        has just set down where it found it is one of them. Read as standing,
+        it was then "picked" from above and missed, over and over. The arm
+        knows where it left the tube, so a matching detection there is taken
+        as the fallen tube it is. Remembered spots with nothing left at them
+        are forgotten.
+        """
+        if not self._set_down:
+            return scene
+        radius = _SET_DOWN_MATCH_M
+        seen = [d.table_xy for d in scene.upright] + [f.table_xy for f in scene.fallen]
+        upright: list[Detection] = []
+        fallen = list(scene.fallen)
+        for detection in scene.upright:
+            known = next(
+                (
+                    t
+                    for t in self._set_down
+                    if t.class_label == detection.class_label
+                    and math.dist(t.table_xy, detection.table_xy) <= radius
+                ),
+                None,
+            )
+            if known is None:
+                upright.append(detection)
+                continue
+            u, v = detection.pixel_xy
+            cap_radius = self.config.workspace.tube.cap_radius
+            fallen.append(
+                replace(
+                    known,
+                    pixel_xy=detection.pixel_xy,
+                    table_xy=self.calibration.pixel_to_table(u, v, object_height=cap_radius),
+                    confidence=detection.confidence,
+                )
+            )
+        self._set_down = [
+            t for t in self._set_down if any(math.dist(t.table_xy, xy) <= radius for xy in seen)
+        ]
+        return Scene(upright=upright, fallen=fallen)
 
     def perceive(self) -> list[Detection]:
         """Standing tubes in the work area, highest confidence first."""
@@ -477,6 +529,11 @@ class SortPipeline:
         logger.info("standing up %s", target.describe())
         result: RightingResult = right_tube(target, self._body_side_probe)
         report.rightings.append(RightingOutcome(fallen=target, result=result))
+        self._set_down = [
+            t for t in self._set_down if math.dist(t.table_xy, target.table_xy) > _SET_DOWN_MATCH_M
+        ]
+        if result.reason is FailureReason.BODY_SIDE_UNKNOWN:
+            self._set_down.append(target)
         if not result.success:
             logger.warning("could not stand up %s: %s", target.describe(), result.reason.value)
         return result.success
@@ -507,8 +564,13 @@ class SortPipeline:
         if nearest is None:
             best = float("inf")
             for tube in world.remaining_tubes():
-                x, y = world.tube_xy(tube.body_id)
-                distance = ((x - job.pick_xy[0]) ** 2 + (y - job.pick_xy[1]) ** 2) ** 0.5
+                # Detections are of caps; a lying tube's base is a tube's length
+                # from its cap, so compare against both.
+                cap = world.tube_cap_position(tube.body_id)
+                distance = min(
+                    math.dist(world.tube_xy(tube.body_id), job.pick_xy),
+                    math.dist((float(cap[0]), float(cap[1])), job.pick_xy),
+                )
                 if distance < best:
                     nearest, best = tube, distance
             if nearest is not None and best >= self.config.workspace.tube.min_separation:
