@@ -401,6 +401,48 @@ def benchmark(
     typer.echo(f"Wrote {markdown_path}")
 
 
+@app.command("detector-study")
+def detector_study(
+    config_dir: ConfigDirOpt = None,
+    scenes: Annotated[
+        int, typer.Option("--scenes", help="Training layouts (each under 3 random lightings).")
+    ] = 300,
+    epochs: Annotated[int, typer.Option("--epochs", help="Training epochs.")] = 24,
+    test_scenes: Annotated[
+        int, typer.Option("--test-scenes", help="Test layouts, each under every condition.")
+    ] = 40,
+    checkpoint: Annotated[
+        Path,
+        typer.Option("--checkpoint", help="Load this cap detector, or train and save it here."),
+    ] = Path("checkpoints/cap_detector.pt"),
+    output_dir: Annotated[
+        Path | None, typer.Option("--output-dir", "-o", help="Where to write the results.")
+    ] = None,
+) -> None:
+    """Compare the HSV and learned cap detectors under changing lighting.
+
+    Needs the optional learning extra (PyTorch).
+    """
+    from samplesort.learning._deps import LearningDependencyError
+    from samplesort.perception.detector_study import TrainingSettings, run_study
+
+    cfg = _load(config_dir)
+    destination = output_dir or cfg.output_dir
+    try:
+        result = run_study(
+            cfg,
+            destination,
+            settings=TrainingSettings(scenes=scenes, epochs=epochs),
+            test_scenes=test_scenes,
+            checkpoint=checkpoint,
+        )
+    except LearningDependencyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(result.to_markdown())
+    typer.echo(f"Wrote {destination}")
+
+
 @app.command("dashboard")
 def dashboard(
     config_dir: ConfigDirOpt = None,
