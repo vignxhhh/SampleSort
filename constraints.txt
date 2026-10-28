@@ -1,0 +1,33 @@
+# Exact dependency versions SampleSort v1.0.0 was verified against.
+#
+# The 290-test suite, the benchmark numbers in docs/results.md and the
+# record -> train -> evaluate run in PROGRESS.md were all produced with these.
+# Reproduce that environment exactly with:
+#
+#     pip install -e ".[dev,learning]" -c constraints.txt
+#
+# pyproject.toml carries looser ranges so ordinary installs stay flexible; a
+# clean `pip install -e .` was also verified with opencv-python-headless 5.0.0.93.
+
+# --- core ---
+numpy==2.4.6
+scipy==1.17.1
+opencv-python-headless==4.11.0.86
+pybullet==3.2.7
+pydantic==2.13.5
+PyYAML==6.0.3
+typer==0.27.2
+streamlit==1.64.0
+pandas==3.0.6
+altair==6.3.0
+
+# --- learning extra ---
+torch==2.10.0
+torchvision==0.25.0
+lerobot==0.4.4
+
+# --- dev extra ---
+pytest==9.1.1
+ruff==0.16.8
+mypy==2.3.1
+types-PyYAML==6.0.12.20260906

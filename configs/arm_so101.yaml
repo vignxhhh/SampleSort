@@ -1,0 +1,52 @@
+# SO-101 style 5-DOF arm with a parallel gripper.
+#
+# The simulated arm is generated from these numbers, so the analytic kinematics
+# and the PyBullet model can never drift apart.
+name: so101
+base_height: 0.0800            # metres, shoulder pitch axis above the arm base
+link_lengths: [0.1750, 0.1750, 0.0900]   # upper arm, forearm, wrist-to-TCP
+
+joint_names: [base_yaw, shoulder, elbow, wrist_pitch, wrist_roll]
+
+# Radians. Order matches joint_names.
+joint_limits:
+  - [-3.1416, 3.1416]          # base_yaw
+  - [-0.5236, 2.6180]          # shoulder
+  - [-2.7925, 0.0873]          # elbow
+  - [-2.3562, 2.3562]          # wrist_pitch
+  - [-3.1416, 3.1416]          # wrist_roll
+
+# Tool pointing straight down, TCP at radius 0.18 m and height 0.22 m.
+home_position: [0.0, 1.4904, -1.1673, -1.8939, 0.0]
+
+# Folded back over the base so the overhead camera sees the whole pickup zone.
+# The pipeline retracts here before every perception step.
+observe_position: [0.0, 2.0673, -2.2041, -1.434, 0.0]
+
+max_joint_velocity: 1.5        # rad/s, used to time scripted trajectories
+default_move_duration: 1.0     # seconds
+
+gripper:
+  open_width: 0.0400           # metres between fingers
+  closed_width: 0.0120
+  finger_length: 0.0400
+  grasp_tolerance_xy: 0.0180   # max TCP-to-tube horizontal error for a successful grasp
+  grasp_tolerance_z: 0.0250    # max TCP-to-tube vertical error for a successful grasp
+
+# Real-hardware values. Ignored entirely when mode == sim.
+serial_port: /dev/ttyACM0
+baudrate: 1000000
+servo_model: sts3215
+servo_ids: [1, 2, 3, 4, 5]
+gripper_servo_id: 6
+
+# Written by LeRobot's own calibration tool; see docs/hardware_setup.md.
+# The Feetech bus refuses normalised reads and writes without it.
+servo_calibration_path: configs/so101_calibration.json
+
+# Mapping between SampleSort's kinematic convention and the servos'.
+# The bus reports degrees measured from each joint's calibrated mid-position, so
+# these align that zero with the kinematic zero (arm extended horizontally along
+# +X, tool pointing along +X). Both are measured during bring-up.
+servo_offsets_deg: [0.0, 0.0, 0.0, 0.0, 0.0]
+servo_signs: [1, 1, 1, 1, 1]
