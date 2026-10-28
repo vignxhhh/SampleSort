@@ -33,6 +33,10 @@ python -m http.server 8000 --directory docs/web
 # then open http://localhost:8000
 ```
 
+`.github/workflows/pages.yml` publishes this folder to GitHub Pages on every
+push to `main` that touches it. Turn it on once under Settings → Pages → Source:
+"GitHub Actions"; the site is then at https://vignxhhh.github.io/SampleSort/.
+
 ## What it shows
 
 | Section | Contents |

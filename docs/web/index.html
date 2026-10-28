@@ -1152,20 +1152,21 @@
 
   /* ============================ nav + reveal ========================== */
   const nav = $("nav");
-  const onScroll = () => nav.classList.toggle("scrolled", scrollY > 8);
-  addEventListener("scroll", onScroll, { passive: true }); onScroll();
   const navLinks = Array.from(document.querySelectorAll(".navlinks a"));
+  const spyIds = ["run", "about", "gallery", "capabilities", "lighting", "how", "start"];
+  // Light the link for the last section whose top has passed mid-screen, or none above the first.
+  const spy = () => {
+    let cur = null;
+    spyIds.forEach(id => { const el = $(id); if (el && el.getBoundingClientRect().top <= innerHeight * 0.5) cur = id; });
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) cur = spyIds[spyIds.length - 1];
+    navLinks.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + cur));
+  };
+  const onScroll = () => { nav.classList.toggle("scrolled", scrollY > 8); spy(); };
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
   const io = new IntersectionObserver(entries => {
     entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
   }, { rootMargin: "0px 0px -8% 0px" });
   document.querySelectorAll(".reveal").forEach(el => io.observe(el));
-  const secIO = new IntersectionObserver(entries => {
-    entries.forEach(e => {
-      if (!e.isIntersecting) return;
-      navLinks.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id));
-    });
-  }, { rootMargin: "-45% 0px -50% 0px" });
-  ["about", "run", "gallery", "capabilities", "lighting", "how", "start"].forEach(id => $(id) && secIO.observe($(id)));
 
   /* ============================== count-up ============================ */
   function countUp(el) {
