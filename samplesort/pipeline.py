@@ -1,0 +1,627 @@
+"""The main sort loop: perceive, plan, execute, log, repeat.
+
+One iteration retracts the arm to its observe pose, captures a frame, detects and
+classifies every tube in the pickup zone, plans jobs against the current rack
+state, and executes them. Failed grasps are retried once and then skipped; every
+attempt is written to the sort log either way.
+
+Tubes that have fallen over are handled once every standing tube is gone, so the
+gripper never has to reach down beside a standing neighbour: one fallen tube at
+a time is carried to the righting station and stood up, and the next iteration
+sorts it from there like any other tube.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+import time
+import uuid
+from dataclasses import dataclass, field, replace
+
+import numpy as np
+
+from samplesort.config import SampleSortConfig
+from samplesort.control.scripted import (
+    ExecutionResult,
+    FailureReason,
+    RightingResult,
+    ScriptedController,
+)
+from samplesort.hal.factory import Backend
+from samplesort.hal.sim_camera import SimCamera
+from samplesort.logging_db.sort_log import SortLog, SortRecord
+from samplesort.perception.calibration import (
+    DEFAULT_CALIBRATION_NAME,
+    Calibration,
+    CalibrationError,
+    calibration_from_camera_pose,
+)
+from samplesort.perception.detector import TubeDetector
+from samplesort.perception.fallen import body_side
+from samplesort.perception.types import Detection, FallenTube, Scene
+from samplesort.planning.rack_state import RackState
+from samplesort.planning.task_planner import PickPlaceJob, PlanResult, TaskPlanner
+
+logger = logging.getLogger(__name__)
+
+#: How close a detection must be to where the arm left a lying tube to be that tube.
+_SET_DOWN_MATCH_M = 0.02
+
+
+@dataclass
+class JobOutcome:
+    """What happened to one planned job.
+
+    Attributes:
+        job: The job that was attempted.
+        result: The controller's result for the final attempt.
+        attempts: How many times the job was tried, including retries.
+    """
+
+    job: PickPlaceJob
+    result: ExecutionResult
+    attempts: int = 1
+
+    @property
+    def success(self) -> bool:
+        """Whether the job ultimately succeeded."""
+        return self.result.success
+
+
+@dataclass
+class RightingOutcome:
+    """One attempt to stand a fallen tube back up.
+
+    Attributes:
+        fallen: The tube as it was detected.
+        result: What the controller reported.
+    """
+
+    fallen: FallenTube
+    result: RightingResult
+
+    @property
+    def success(self) -> bool:
+        """Whether the manoeuvre completed."""
+        return self.result.success
+
+
+@dataclass
+class PipelineReport:
+    """Summary of one complete pipeline run.
+
+    Attributes:
+        run_id: Identifier shared by every log row this run produced.
+        mode: Which controller was used.
+        iterations: How many perceive-plan-execute cycles ran.
+        outcomes: One entry per attempted job.
+        detections_seen: Total detections across every iteration.
+        skipped: ``(class_label, reason)`` for each detection that was not planned.
+        duration_s: Wall-clock seconds for the whole run.
+        dry_run: Whether motion was suppressed.
+        rightings: One entry per attempt to stand a fallen tube back up.
+        fallen_left: Fallen tubes still lying in the work area when the run ended.
+    """
+
+    run_id: str
+    mode: str
+    iterations: int = 0
+    outcomes: list[JobOutcome] = field(default_factory=list)
+    detections_seen: int = 0
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    duration_s: float = 0.0
+    dry_run: bool = False
+    rightings: list[RightingOutcome] = field(default_factory=list)
+    fallen_left: list[FallenTube] = field(default_factory=list)
+
+    @property
+    def righted(self) -> int:
+        """How many righting attempts completed."""
+        return sum(1 for outcome in self.rightings if outcome.success)
+
+    @property
+    def attempted(self) -> int:
+        """How many jobs were attempted."""
+        return len(self.outcomes)
+
+    @property
+    def succeeded(self) -> int:
+        """How many jobs succeeded."""
+        return sum(1 for outcome in self.outcomes if outcome.success)
+
+    @property
+    def success_rate(self) -> float:
+        """Fraction of attempted jobs that succeeded, or 0.0 if none were attempted."""
+        return self.succeeded / self.attempted if self.attempted else 0.0
+
+    @property
+    def grasp_success_rate(self) -> float:
+        """Fraction of attempts whose grasp stage worked, across all retries."""
+        total = sum(outcome.attempts for outcome in self.outcomes)
+        if not total:
+            return 0.0
+        grasped = sum(1 for outcome in self.outcomes if outcome.result.grasped)
+        return grasped / total
+
+    @property
+    def mean_duration_s(self) -> float:
+        """Mean seconds per successful job, or 0.0 when none succeeded."""
+        successes = [o.result.duration_s for o in self.outcomes if o.success]
+        return sum(successes) / len(successes) if successes else 0.0
+
+    def failures_by_reason(self) -> dict[str, int]:
+        """How many jobs failed, broken down by failure reason."""
+        counts: dict[str, int] = {}
+        for outcome in self.outcomes:
+            if not outcome.success:
+                key = outcome.result.reason.value
+                counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def summary_lines(self) -> list[str]:
+        """Human-readable summary lines for CLI output."""
+        lines = [
+            f"run {self.run_id} ({self.mode}{', dry-run' if self.dry_run else ''})",
+            f"  iterations        : {self.iterations}",
+            f"  detections seen   : {self.detections_seen}",
+            f"  jobs attempted    : {self.attempted}",
+            f"  jobs succeeded    : {self.succeeded} ({self.success_rate:.0%})",
+            f"  mean time per job : {self.mean_duration_s:.2f} s",
+            f"  total duration    : {self.duration_s:.2f} s",
+        ]
+        failures = self.failures_by_reason()
+        if failures:
+            breakdown = ", ".join(f"{name}={count}" for name, count in failures.items())
+            lines.append(f"  failures          : {breakdown}")
+        if self.skipped:
+            lines.append(f"  skipped detections: {len(self.skipped)}")
+        if self.rightings:
+            lines.append(
+                f"  fallen tubes      : {self.righted}/{len(self.rightings)} stood back up"
+            )
+        if self.fallen_left:
+            lines.append(f"  still fallen      : {len(self.fallen_left)}")
+        return lines
+
+
+class SortPipeline:
+    """Runs the perceive-plan-execute-log loop until the pickup zone is clear.
+
+    Args:
+        config: The validated configuration bundle.
+        backend: A connected arm and camera.
+        sort_log: Where attempts are recorded. One is opened from
+            ``config.database_path`` when omitted.
+        controller: The controller to execute jobs with. Defaults to the scripted
+            controller; the learned controller is injected here in phase 7.
+        calibration: Pixel-to-table mapping. Derived or loaded when omitted.
+    """
+
+    def __init__(
+        self,
+        config: SampleSortConfig,
+        backend: Backend,
+        *,
+        sort_log: SortLog | None = None,
+        controller: ScriptedController | None = None,
+        calibration: Calibration | None = None,
+    ) -> None:
+        """Wire the pipeline together (see the class docstring for args)."""
+        self.config = config
+        self.backend = backend
+        self._owns_log = sort_log is None
+        self.sort_log = sort_log or SortLog(config.database_path)
+        self.calibration = calibration or self._resolve_calibration()
+        self.detector = TubeDetector(config, self.calibration)
+        self.rack_state = RackState(config.workspace, config.classes)
+        self.planner = TaskPlanner(config, self.rack_state)
+        self.controller = controller or ScriptedController(
+            config, backend.arm, backend.world, scanner=backend.scanner
+        )
+        # Seeded from the world, not the config: the benchmark builds every trial
+        # from the same config, and a config seed gave every trial the identical
+        # noise sequence, so N trials measured one noise draw N times.
+        world_seed = backend.world.seed if backend.world is not None else config.seed
+        self._noise_rng = np.random.default_rng(world_seed)
+        #: Tubes the arm put back down lying because it could not tell which end
+        #: was the body. See :meth:`_remember_set_down`.
+        self._set_down: list[FallenTube] = []
+
+    # ------------------------------------------------------------- calibration
+
+    def _resolve_calibration(self) -> Calibration:
+        """Load a saved calibration, or derive one from the sim camera pose.
+
+        Raises:
+            CalibrationError: In real mode when no saved calibration exists.
+        """
+        saved = self.config.config_dir / DEFAULT_CALIBRATION_NAME
+        if saved.is_file():
+            logger.info("using saved calibration from %s", saved)
+            return Calibration.load(saved)
+
+        camera = self.backend.camera
+        if isinstance(camera, SimCamera):
+            if not camera.is_connected:
+                camera.connect()
+            logger.debug("deriving calibration analytically from the sim camera pose")
+            return calibration_from_camera_pose(
+                self.config.camera, self.config.workspace, camera.world_to_pixel
+            )
+
+        raise CalibrationError(
+            f"no calibration found at {saved}. Run 'samplesort calibrate' with the "
+            f"printed ArUco board in view before sorting on real hardware."
+        )
+
+    # ------------------------------------------------------------------ helpers
+
+    def perceive_scene(self) -> Scene:
+        """Retract the arm clear of the camera and look at the work area.
+
+        Returns:
+            Standing tubes in the pickup zone or at the righting station, and
+            fallen tubes, from a single frame.
+        """
+        self.backend.arm.move_to_joints(self.config.arm.observe_position)
+        if self.backend.world is not None:
+            self.backend.world.step(self.config.pipeline.settle_steps)
+        scene = self._remember_set_down(self.detector.detect_scene(self.backend.camera.read()))
+        return Scene(upright=[self._jitter(d) for d in scene.upright], fallen=scene.fallen)
+
+    def _remember_set_down(self, scene: Scene) -> Scene:
+        """Keep treating a tube the arm put back down lying as fallen.
+
+        A lying tube can show a nearly round cap outline from some angles
+        (measured: aspect 1.22 against a 1.25 threshold), and a tube the arm
+        has just set down where it found it is one of them. Read as standing,
+        it was then "picked" from above and missed, over and over. The arm
+        knows where it left the tube, so a matching detection there is taken
+        as the fallen tube it is. Remembered spots with nothing left at them
+        are forgotten.
+        """
+        if not self._set_down:
+            return scene
+        radius = _SET_DOWN_MATCH_M
+        seen = [d.table_xy for d in scene.upright] + [f.table_xy for f in scene.fallen]
+        upright: list[Detection] = []
+        fallen = list(scene.fallen)
+        for detection in scene.upright:
+            known = next(
+                (
+                    t
+                    for t in self._set_down
+                    if t.class_label == detection.class_label
+                    and math.dist(t.table_xy, detection.table_xy) <= radius
+                ),
+                None,
+            )
+            if known is None:
+                upright.append(detection)
+                continue
+            u, v = detection.pixel_xy
+            cap_radius = self.config.workspace.tube.cap_radius
+            fallen.append(
+                replace(
+                    known,
+                    pixel_xy=detection.pixel_xy,
+                    table_xy=self.calibration.pixel_to_table(u, v, object_height=cap_radius),
+                    confidence=detection.confidence,
+                )
+            )
+        self._set_down = [
+            t for t in self._set_down if any(math.dist(t.table_xy, xy) <= radius for xy in seen)
+        ]
+        return Scene(upright=upright, fallen=fallen)
+
+    def perceive(self) -> list[Detection]:
+        """Standing tubes in the work area, highest confidence first."""
+        return self.perceive_scene().upright
+
+    def _body_side_probe(self, cap_xyz: np.ndarray, axis: np.ndarray) -> float | None:
+        """Ask the overhead camera which end of the held tube is the body."""
+        frame = self.backend.camera.read()
+        ws = self.config.workspace
+        return body_side(frame, self.calibration, cap_xyz, axis, ws.tube, ws.racks)
+
+    def _next_to_right(self, fallen: list[FallenTube]) -> FallenTube | None:
+        """The fallen tube to stand up next, or ``None`` if righting is not possible now."""
+        ws = self.config.workspace
+        if ws.righting_station is None:
+            return None
+        if any(ws.near_righting_station(*f.table_xy) for f in fallen):
+            logger.warning("a fallen tube is lying at the righting station; it is blocked")
+            return None
+        margin = ws.tube.total_height
+        in_zone = [f for f in fallen if ws.pickup_zone.contains(*f.table_xy, margin=margin)]
+        return in_zone[0] if in_zone else None
+
+    def _jitter(self, detection: Detection) -> Detection:
+        """Add the configured localisation noise to a detection.
+
+        A no-op unless ``pipeline.perception_noise_m`` is set. See
+        :class:`~samplesort.config.PipelineConfig` for why the knob exists.
+        """
+        sigma = self.config.pipeline.perception_noise_m
+        if sigma <= 0.0:
+            return detection
+        offset = self._noise_rng.normal(0.0, sigma, size=2)
+        return replace(
+            detection,
+            table_xy=(detection.table_xy[0] + offset[0], detection.table_xy[1] + offset[1]),
+        )
+
+    def plan(self, detections: list[Detection]) -> PlanResult:
+        """Turn detections into ordered jobs against the current rack state.
+
+        In simulation each job is additionally linked to the PyBullet body it
+        refers to. That link is *instrumentation*, not perception: it is what lets
+        the controller verify a grasp and a placement against ground truth, and
+        what lets the benchmark measure whether a tube reached the rack its true
+        class belongs in. Nothing in perception or planning consults it, and on
+        real hardware it is simply absent.
+        """
+        plan = self.planner.plan(detections)
+        if self.backend.world is None:
+            return plan
+        return PlanResult(
+            jobs=[self._attach_ground_truth(job) for job in plan.jobs], skipped=plan.skipped
+        )
+
+    def _attach_ground_truth(self, job: PickPlaceJob) -> PickPlaceJob:
+        """Link a job to the simulated tube nearest its pick position."""
+        world = self.backend.world
+        if world is None:
+            return job
+
+        nearest, best = None, float("inf")
+        for tube in world.remaining_tubes():
+            x, y = world.tube_xy(tube.body_id)
+            distance = ((x - job.pick_xy[0]) ** 2 + (y - job.pick_xy[1]) ** 2) ** 0.5
+            if distance < best:
+                nearest, best = tube, distance
+
+        if nearest is None or best > self.config.arm.gripper.grasp_tolerance_xy:
+            return job
+        return replace(job, body_id=nearest.body_id)
+
+    def true_label_for(self, job: PickPlaceJob) -> str | None:
+        """Ground-truth class of a job's tube, when running in simulation.
+
+        Returns:
+            The simulated tube's real class label, or ``None`` outside simulation
+            or when the job was never linked to a body.
+        """
+        world = self.backend.world
+        if world is None or job.body_id is None:
+            return None
+        try:
+            return world.tube_by_id(job.body_id).label
+        except KeyError:
+            return None
+
+    def _record(self, job: PickPlaceJob, result: ExecutionResult, run_id: str) -> None:
+        """Write one attempt to the sort log."""
+        self.sort_log.insert(
+            SortRecord(
+                class_label=job.class_label,
+                pickup_xy=job.pick_xy,
+                rack_id=job.rack_id,
+                slot_index=job.slot_index,
+                mode=self.config.pipeline.control_mode,
+                success=result.success,
+                duration_s=result.duration_s,
+                # The wrist scan reads the cap being picked; an ID from the
+                # overhead frame is the fallback for a camera that can resolve it.
+                sample_id=result.sample_id or job.sample_id,
+                failure_reason=None if result.success else result.reason.value,
+                run_id=run_id,
+            )
+        )
+
+    def _execute_with_retry(self, job: PickPlaceJob) -> JobOutcome:
+        """Run a job, retrying a missed grasp up to the configured retry count."""
+        retries = self.config.pipeline.grasp_retries
+        result = self.controller.execute(job)
+        attempts = 1
+
+        while (
+            not result.success
+            and attempts <= retries
+            and result.reason in (FailureReason.GRASP_MISSED, FailureReason.DROPPED_IN_TRANSIT)
+        ):
+            logger.info("retrying %s after %s", job.describe(), result.reason.value)
+            job = self._remeasure(job)
+            result = self.controller.execute(job)
+            attempts += 1
+
+        return JobOutcome(job=job, result=result, attempts=attempts)
+
+    def _remeasure(self, job: PickPlaceJob) -> PickPlaceJob:
+        """Look at the tube again before retrying a missed grasp.
+
+        Retrying at the same position repeats the same miss whenever the cause
+        was a bad measurement: in noisy runs every miss was followed by a second
+        one. A fresh look gives the retry a new measurement; if the tube can no
+        longer be seen standing near where it was (knocked over, say), the
+        original position is kept.
+        """
+        reach = 2.0 * self.config.arm.gripper.grasp_tolerance_xy
+        candidates = [
+            d
+            for d in self.perceive_scene().upright
+            if d.class_label == job.class_label and math.dist(d.table_xy, job.pick_xy) <= reach
+        ]
+        if not candidates:
+            return job
+        nearest = min(candidates, key=lambda d: math.dist(d.table_xy, job.pick_xy))
+        x, y = nearest.table_xy
+        return replace(job, pick_xy=(float(x), float(y)))
+
+    # --------------------------------------------------------------------- run
+
+    def run(self, *, dry_run: bool = False, run_id: str | None = None) -> PipelineReport:
+        """Sort until the pickup zone is clear or the iteration cap is hit.
+
+        Args:
+            dry_run: Perceive and plan only; no motion and no log rows.
+            run_id: Identifier to tag log rows with. Generated when omitted.
+
+        Returns:
+            A report covering every iteration, job and failure.
+        """
+        started = time.perf_counter()
+        identifier = run_id or uuid.uuid4().hex[:12]
+        report = PipelineReport(
+            run_id=identifier, mode=self.config.pipeline.control_mode, dry_run=dry_run
+        )
+
+        righting_failures = 0
+        scene = Scene(upright=[], fallen=[])
+        for iteration in range(self.config.pipeline.max_iterations):
+            scene = self.perceive_scene()
+            detections = scene.upright
+            report.iterations = iteration + 1
+            report.detections_seen += len(detections)
+
+            if scene.is_clear:
+                logger.info("pickup zone is clear after %d iteration(s)", report.iterations)
+                break
+
+            if not detections:
+                # Only fallen tubes are left, so their surroundings are clear.
+                if dry_run:
+                    for fallen in scene.fallen:
+                        logger.info("dry run: would stand up %s", fallen.describe())
+                    break
+                if not self._right_one(scene.fallen, report):
+                    righting_failures += 1
+                    if righting_failures > self.config.pipeline.max_righting_attempts:
+                        logger.warning(
+                            "giving up on fallen tubes after %d failures", righting_failures
+                        )
+                        break
+                continue
+
+            plan = self.plan(detections)
+            report.skipped.extend(
+                (skip.detection.class_label, skip.reason) for skip in plan.skipped
+            )
+
+            if plan.is_empty:
+                logger.warning(
+                    "%d detection(s) remain but none can be planned; stopping", len(detections)
+                )
+                break
+
+            if dry_run:
+                logger.info("dry run: planned %d job(s), not executing", len(plan.jobs))
+                for job in plan.jobs:
+                    logger.info("  would execute %s", job.describe())
+                break
+
+            for job in plan.jobs:
+                outcome = self._execute_with_retry(job)
+                report.outcomes.append(outcome)
+                self._record(job, outcome.result, identifier)
+                if not outcome.success:
+                    # The slot was reserved optimistically; give it back.
+                    self.rack_state.release(job.rack_id, job.slot_index)
+                    self._mark_unsortable(job)
+                elif self.backend.world is not None and job.body_id is not None:
+                    tube = self.backend.world.tube_by_id(job.body_id)
+                    tube.placed_rack, tube.placed_slot = job.rack_id, job.slot_index
+        else:
+            logger.warning(
+                "hit the %d-iteration cap with tubes still in the pickup zone",
+                self.config.pipeline.max_iterations,
+            )
+
+        report.fallen_left = list(scene.fallen) if not scene.is_clear else []
+        if not dry_run:
+            self.backend.arm.go_home()
+        report.duration_s = time.perf_counter() - started
+        return report
+
+    def _right_one(self, fallen: list[FallenTube], report: PipelineReport) -> bool:
+        """Stand up one fallen tube. Returns whether an attempt was made and completed."""
+        right_tube = getattr(self.controller, "right_tube", None)
+        target = self._next_to_right(fallen)
+        if right_tube is None or target is None:
+            if right_tube is None:
+                logger.warning("the active controller cannot right fallen tubes")
+            return False
+        logger.info("standing up %s", target.describe())
+        result: RightingResult = right_tube(target, self._body_side_probe)
+        report.rightings.append(RightingOutcome(fallen=target, result=result))
+        self._set_down = [
+            t for t in self._set_down if math.dist(t.table_xy, target.table_xy) > _SET_DOWN_MATCH_M
+        ]
+        if result.reason is FailureReason.BODY_SIDE_UNKNOWN:
+            self._set_down.append(target)
+        if not result.success:
+            logger.warning("could not stand up %s: %s", target.describe(), result.reason.value)
+        return result.success
+
+    def _mark_unsortable(self, job: PickPlaceJob) -> None:
+        """Retire a tube the pipeline could not sort so the loop makes progress.
+
+        Without this a tube the arm cannot grasp would be re-detected forever. In
+        sim the tube is removed from the scene; on real hardware an operator is
+        asked to clear it.
+        """
+        world = self.backend.world
+        if world is None:
+            logger.error(
+                "could not sort the %s tube at (%.3f, %.3f); please remove it by hand",
+                job.class_label,
+                job.pick_xy[0],
+                job.pick_xy[1],
+            )
+            return
+
+        nearest = None
+        if job.body_id is not None:
+            try:
+                nearest = world.tube_by_id(job.body_id)
+            except KeyError:
+                nearest = None
+        if nearest is None:
+            best = float("inf")
+            for tube in world.remaining_tubes():
+                # Detections are of caps; a lying tube's base is a tube's length
+                # from its cap, so compare against both.
+                cap = world.tube_cap_position(tube.body_id)
+                distance = min(
+                    math.dist(world.tube_xy(tube.body_id), job.pick_xy),
+                    math.dist((float(cap[0]), float(cap[1])), job.pick_xy),
+                )
+                if distance < best:
+                    nearest, best = tube, distance
+            if nearest is not None and best >= self.config.workspace.tube.min_separation:
+                nearest = None
+
+        if nearest is not None:
+            logger.info("retiring unsortable %s tube %d", nearest.label, nearest.body_id)
+            # Drop any grasp constraint first: removing a body that a constraint
+            # still references leaves the constraint dangling, and PyBullet then
+            # complains on the next release.
+            release = getattr(self.backend.arm, "release", None)
+            if callable(release):
+                release()
+            world.bullet.removeBody(nearest.body_id)
+            world.tubes.remove(nearest)
+
+    def close(self) -> None:
+        """Close the sort log if this pipeline opened it."""
+        if self._owns_log:
+            self.sort_log.close()
+
+    def __enter__(self) -> SortPipeline:
+        """Return the pipeline on entry to a ``with`` block."""
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Close the pipeline on exit from a ``with`` block."""
+        self.close()

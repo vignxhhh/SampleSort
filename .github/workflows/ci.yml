@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep every step offline-safe: nothing in CI should reach the HF hub.
+  HF_HUB_OFFLINE: "1"
+  PYTHONHASHSEED: "0"
+
+jobs:
+  quality:
+    name: Lint, type-check and test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and dev tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy samplesort/
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Smoke-test the CLI
+        run: |
+          samplesort --version
+          samplesort config
+          samplesort sim-demo --seed 42 --num-tubes 4
+          samplesort run --mode scripted --dry-run
